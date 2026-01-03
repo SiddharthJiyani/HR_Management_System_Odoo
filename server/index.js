@@ -24,9 +24,33 @@ database.connectDB();
 
 // Routes
 const userRoutes = require("./routes/user");
+const employeeRoutes = require("./routes/employee");
+const attendanceRoutes = require("./routes/attendance");
+const leaveRoutes = require("./routes/leave");
+const payrollRoutes = require("./routes/payroll");
 
+// API Routes
 app.use("/api/auth", userRoutes);
+app.use("/api/employees", employeeRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/leaves", leaveRoutes);
+app.use("/api/payroll", payrollRoutes);
 
+// Health check route
+app.get("/api/health", (req, res) => {
+    res.status(200).json({ success: true, message: "Server is running" });
+});
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({ success: false, message: "Route not found" });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ success: false, message: "Internal server error" });
+});
 
 // Start the server
 app.listen(port, () => {

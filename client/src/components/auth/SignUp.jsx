@@ -10,6 +10,8 @@ const SignUp = () => {
   
   const [formData, setFormData] = useState({
     employeeId: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -37,6 +39,10 @@ const SignUp = () => {
     
     if (!formData.employeeId) {
       newErrors.employeeId = 'Employee ID is required';
+    }
+
+    if (!formData.firstName) {
+      newErrors.firstName = 'First name is required';
     }
     
     if (!formData.email) {
@@ -115,6 +121,7 @@ const SignUp = () => {
   };
 
   const isFormValid = formData.employeeId && 
+                     formData.firstName &&
                      formData.email && 
                      formData.password && 
                      formData.confirmPassword && 
@@ -142,6 +149,24 @@ const SignUp = () => {
           placeholder="Enter your employee ID"
           required
         />
+
+        <div className="grid grid-cols-2 gap-4">
+          <InputField
+            label="First Name"
+            value={formData.firstName}
+            onChange={handleInputChange('firstName')}
+            error={errors.firstName}
+            placeholder="First name"
+            required
+          />
+          <InputField
+            label="Last Name"
+            value={formData.lastName}
+            onChange={handleInputChange('lastName')}
+            error={errors.lastName}
+            placeholder="Last name"
+          />
+        </div>
 
         <InputField
           label="Email Address"

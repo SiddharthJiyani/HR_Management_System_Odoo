@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Button, Badge, Input } from '../components/ui';
+import { leaveAPI } from '../services/api';
 
 const PlusIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -31,17 +32,19 @@ const LeaveTypeIcon = ({ type }) => {
   return <span className="text-xl">{icons[type] || icons.other}</span>;
 };
 
-const LeaveRequest = ({ request }) => {
+const LeaveRequest = ({ request, onCancel }) => {
   const statusVariants = {
     pending: 'warning',
     approved: 'success',
     rejected: 'error',
+    cancelled: 'default',
   };
 
   const statusLabels = {
     pending: 'Pending',
     approved: 'Approved',
     rejected: 'Rejected',
+    cancelled: 'Cancelled',
   };
 
   return (
@@ -69,8 +72,11 @@ const LeaveRequest = ({ request }) => {
       </div>
 
       {/* Actions */}
-      {request.status === 'pending' && (
-        <button className="flex-shrink-0 p-2 text-neutral-400 hover:text-error hover:bg-error/10 rounded-lg transition-colors">
+      {request.status === 'pending' && onCancel && (
+        <button 
+          onClick={() => onCancel(request.id)}
+          className="flex-shrink-0 p-2 text-neutral-400 hover:text-error hover:bg-error/10 rounded-lg transition-colors"
+        >
           <CloseIcon />
         </button>
       )}
@@ -80,6 +86,15 @@ const LeaveRequest = ({ request }) => {
 
 const TimeOff = () => {
   const [showNewRequest, setShowNewRequest] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [leaveBalance, setLeaveBalance] = useState({
+    vacation: { total: 20, used: 0, remaining: 20 },
+    sick: { total: 10, used: 0, remaining: 10 },
+    personal: { total: 5, used: 0, remaining: 5 },
+  });
   const [newRequest, setNewRequest] = useState({
     type: 'vacation',
     startDate: '',
@@ -87,62 +102,148 @@ const TimeOff = () => {
     reason: '',
   });
 
-  // Leave balance
-  const leaveBalance = {
-    vacation: { total: 20, used: 5, remaining: 15 },
-    sick: { total: 10, used: 2, remaining: 8 },
-    personal: { total: 5, used: 1, remaining: 4 },
+  // Map leave types from API format
+  const mapLeaveType = (type) => {
+    const typeMap = {
+      annual: 'vacation',
+      sick: 'sick',
+      personal: 'personal',
+      casual: 'personal',
+      maternity: 'maternity',
+      paternity: 'maternity',
+      bereavement: 'bereavement',
+      unpaid: 'other',
+    };
+    return typeMap[type?.toLowerCase()] || 'other';
   };
 
-  // Mock requests
-  const leaveRequests = [
-    {
-      id: 1,
-      type: 'vacation',
-      title: 'Summer Vacation',
-      startDate: 'Jan 15, 2026',
-      endDate: 'Jan 20, 2026',
-      days: 5,
-      status: 'pending',
-      reason: 'Family trip to Hawaii',
-    },
-    {
-      id: 2,
-      type: 'sick',
-      title: 'Medical Appointment',
-      startDate: 'Dec 28, 2025',
-      endDate: 'Dec 28, 2025',
-      days: 1,
-      status: 'approved',
-      reason: 'Annual health checkup',
-    },
-    {
-      id: 3,
-      type: 'personal',
-      title: 'Personal Day',
-      startDate: 'Dec 10, 2025',
-      endDate: 'Dec 10, 2025',
-      days: 1,
-      status: 'approved',
-      reason: 'Moving to new apartment',
-    },
-    {
-      id: 4,
-      type: 'vacation',
-      title: 'Holiday Break',
-      startDate: 'Dec 23, 2025',
-      endDate: 'Dec 27, 2025',
-      days: 3,
-      status: 'rejected',
-      reason: 'Christmas holiday with family',
-    },
-  ];
+  // Map leave type back to API format
+  const mapLeaveTypeToAPI = (type) => {
+    const typeMap = {
+      vacation: 'annual',
+      sick: 'sick',
+      personal: 'casual',
+    };
+    return typeMap[type] || type;
+  };
 
-  const handleSubmitRequest = () => {
-    // Handle form submission
-    console.log('New request:', newRequest);
-    setShowNewRequest(false);
-    setNewRequest({ type: 'vacation', startDate: '', endDate: '', reason: '' });
+  // Format date for display
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  // Transform API data to display format
+  const transformLeaveData = (leaves) => {
+    return leaves.map(leave => {
+      const startDate = new Date(leave.startDate);
+      const endDate = new Date(leave.endDate);
+      const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
+      return {
+        id: leave._id,
+        type: mapLeaveType(leave.leaveType),
+        title: leave.leaveType ? `${leave.leaveType.charAt(0).toUpperCase() + leave.leaveType.slice(1)} Leave` : 'Leave Request',
+        startDate: formatDate(leave.startDate),
+        endDate: formatDate(leave.endDate),
+        days: leave.totalDays || days,
+        status: leave.status,
+        reason: leave.reason,
+      };
+    });
+  };
+
+  // Fetch leave requests
+  const fetchLeaves = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await leaveAPI.getMyLeaves();
+      
+      if (response.success) {
+        setLeaveRequests(transformLeaveData(response.data || []));
+        
+        // Extract leave balance if provided
+        if (response.leaveBalance) {
+          setLeaveBalance({
+            vacation: {
+              total: response.leaveBalance.annual?.total || 20,
+              used: response.leaveBalance.annual?.used || 0,
+              remaining: response.leaveBalance.annual?.remaining || 20,
+            },
+            sick: {
+              total: response.leaveBalance.sick?.total || 10,
+              used: response.leaveBalance.sick?.used || 0,
+              remaining: response.leaveBalance.sick?.remaining || 10,
+            },
+            personal: {
+              total: response.leaveBalance.casual?.total || 5,
+              used: response.leaveBalance.casual?.used || 0,
+              remaining: response.leaveBalance.casual?.remaining || 5,
+            },
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching leaves:', err);
+      setError('Failed to load leave requests. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchLeaves();
+  }, [fetchLeaves]);
+
+  const handleSubmitRequest = async () => {
+    // Validate form
+    if (!newRequest.startDate || !newRequest.endDate) {
+      alert('Please select start and end dates.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      const response = await leaveAPI.apply({
+        leaveType: mapLeaveTypeToAPI(newRequest.type),
+        startDate: newRequest.startDate,
+        endDate: newRequest.endDate,
+        reason: newRequest.reason,
+      });
+
+      if (response.success) {
+        setShowNewRequest(false);
+        setNewRequest({ type: 'vacation', startDate: '', endDate: '', reason: '' });
+        fetchLeaves(); // Refresh the list
+      }
+    } catch (err) {
+      console.error('Error submitting leave request:', err);
+      alert(err.message || 'Failed to submit leave request. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelRequest = async (requestId) => {
+    if (!confirm('Are you sure you want to cancel this leave request?')) return;
+    
+    try {
+      const response = await leaveAPI.cancel(requestId, 'Cancelled by employee');
+      
+      if (response.success) {
+        fetchLeaves(); // Refresh the list
+      }
+    } catch (err) {
+      console.error('Error cancelling leave:', err);
+      alert(err.message || 'Failed to cancel leave request. Please try again.');
+    }
   };
 
   return (
@@ -278,6 +379,7 @@ const TimeOff = () => {
                 variant="outline" 
                 onClick={() => setShowNewRequest(false)}
                 className="flex-1"
+                disabled={submitting}
               >
                 Cancel
               </Button>
@@ -285,8 +387,9 @@ const TimeOff = () => {
                 variant="primary" 
                 onClick={handleSubmitRequest}
                 className="flex-1"
+                disabled={submitting}
               >
-                Submit Request
+                {submitting ? 'Submitting...' : 'Submit Request'}
               </Button>
             </div>
           </div>
@@ -299,13 +402,35 @@ const TimeOff = () => {
           Leave Requests
         </h2>
         
-        {leaveRequests.length > 0 ? (
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="ml-3 text-gray-600">Loading leave requests...</span>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <div className="flex flex-col items-center justify-center h-32 text-center">
+            <div className="text-red-500 text-sm mb-3">{error}</div>
+            <Button variant="outline" size="sm" onClick={fetchLeaves}>
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {/* Leave Requests List */}
+        {!loading && !error && leaveRequests.length > 0 && (
           <div className="space-y-2">
             {leaveRequests.map((request) => (
-              <LeaveRequest key={request.id} request={request} />
+              <LeaveRequest key={request.id} request={request} onCancel={handleCancelRequest} />
             ))}
           </div>
-        ) : (
+        )}
+        
+        {/* Empty State */}
+        {!loading && !error && leaveRequests.length === 0 && (
           <div className="text-center py-12">
             <CalendarIcon className="w-16 h-16 mx-auto text-neutral-300 mb-4" />
             <h3 className="text-lg font-medium text-neutral-700">No leave requests</h3>

@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const Employee = require("../models/Employee");
 const OTP = require("../models/OTP");
 const otpGenerator = require("otp-generator");
 const mailSender = require("../utils/mailSender");
@@ -10,7 +11,7 @@ const forgotPasswordTemplate = require("../mail/templates/forgotPasswordTemplate
 exports.signup = async (req, res) => {
   try {
     // Destructure fields from the request body
-    const { employeeId, email, password, confirmPassword, role } = req.body;
+    const { employeeId, firstName, lastName, email, password, confirmPassword, role } = req.body;
     // Check if All Details are there or not
     if (!employeeId || !email || !password || !confirmPassword || !role) {
       return res.status(403).send({
@@ -49,13 +50,35 @@ exports.signup = async (req, res) => {
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // create entry in db
+    // create user entry in db
     const user = await User.create({
       employeeId,
+      firstName: firstName || '',
+      lastName: lastName || '',
       email,
       password: hashedPassword,
       role: role,
     });
+
+    // Create corresponding Employee record
+    await Employee.create({
+      user: user._id,
+      firstName: firstName || '',
+      lastName: lastName || '',
+      email: email,
+      employeeId: employeeId,
+      role: role,
+      department: role === 'hr' ? 'Human Resources' : 'Other',
+      designation: role === 'hr' ? 'HR Manager' : role === 'admin' ? 'Administrator' : 'Employee',
+      joinDate: new Date(),
+      leaveBalance: {
+        vacation: 20,
+        sick: 10,
+        personal: 5,
+        unpaid: 0
+      }
+    });
+
     return res.status(200).json({
       success: true,
       user,

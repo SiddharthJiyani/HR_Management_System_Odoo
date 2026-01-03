@@ -1,15 +1,21 @@
 const API_BASE_URL = 'http://localhost:4000/api';
 
+// Get token from localStorage
+const getAuthToken = () => localStorage.getItem('hrms_token');
+
 // Generic API call function
 const apiCall = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
   
+  const token = getAuthToken();
+  
   const config = {
     headers: {
       'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
       ...options.headers,
     },
-    credentials: 'include', // Include cookies for authentication
+    credentials: 'include',
     ...options,
   };
 
@@ -34,7 +40,6 @@ const apiCall = async (endpoint, options = {}) => {
 
 // Auth API functions
 export const authAPI = {
-  // Sign up function
   signup: async (userData) => {
     return apiCall('/auth/signup', {
       method: 'POST',
@@ -42,7 +47,6 @@ export const authAPI = {
     });
   },
 
-  // Sign in function
   signin: async (credentials) => {
     return apiCall('/auth/login', {
       method: 'POST',
@@ -50,7 +54,6 @@ export const authAPI = {
     });
   },
 
-  // Send OTP function (if needed later)
   sendOTP: async (email) => {
     return apiCall('/auth/sendotp', {
       method: 'POST',
@@ -58,7 +61,6 @@ export const authAPI = {
     });
   },
 
-  // Forgot password function (if needed later)
   forgotPassword: async (email) => {
     return apiCall('/auth/forgotpassword', {
       method: 'POST',
@@ -67,7 +69,225 @@ export const authAPI = {
   },
 };
 
-// Export default API base for other potential APIs
+// Employee API functions
+export const employeeAPI = {
+  // Get all employees (HR/Admin)
+  getAll: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/employees${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get single employee by ID
+  getById: async (id) => {
+    return apiCall(`/employees/${id}`);
+  },
+
+  // Get my profile (current logged-in employee)
+  getMyProfile: async () => {
+    return apiCall('/employees/me');
+  },
+
+  // Update my profile
+  updateMyProfile: async (data) => {
+    return apiCall('/employees/me', {
+      method: 'PUT',
+      body: data,
+    });
+  },
+
+  // Create new employee (HR/Admin)
+  create: async (data) => {
+    return apiCall('/employees', {
+      method: 'POST',
+      body: data,
+    });
+  },
+
+  // Update employee (HR/Admin)
+  update: async (id, data) => {
+    return apiCall(`/employees/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+  },
+
+  // Delete/Deactivate employee (HR/Admin)
+  delete: async (id) => {
+    return apiCall(`/employees/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Get employee statistics (HR/Admin)
+  getStats: async () => {
+    return apiCall('/employees/stats');
+  },
+};
+
+// Attendance API functions
+export const attendanceAPI = {
+  // Check in
+  checkIn: async (data = {}) => {
+    return apiCall('/attendance/check-in', {
+      method: 'POST',
+      body: data,
+    });
+  },
+
+  // Check out
+  checkOut: async (data = {}) => {
+    return apiCall('/attendance/check-out', {
+      method: 'POST',
+      body: data,
+    });
+  },
+
+  // Get my attendance
+  getMyAttendance: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/attendance/my${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get today's status
+  getTodayStatus: async () => {
+    return apiCall('/attendance/today');
+  },
+
+  // Get all attendance (HR/Admin)
+  getAll: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/attendance/all${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get employee attendance
+  getEmployeeAttendance: async (employeeId, params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/attendance/employee/${employeeId}${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Mark attendance (HR/Admin)
+  mark: async (data) => {
+    return apiCall('/attendance/mark', {
+      method: 'POST',
+      body: data,
+    });
+  },
+};
+
+// Leave API functions
+export const leaveAPI = {
+  // Apply for leave
+  apply: async (data) => {
+    return apiCall('/leaves/apply', {
+      method: 'POST',
+      body: data,
+    });
+  },
+
+  // Get my leaves
+  getMyLeaves: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/leaves/my${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Cancel leave
+  cancel: async (id, reason = '') => {
+    return apiCall(`/leaves/cancel/${id}`, {
+      method: 'PUT',
+      body: { reason },
+    });
+  },
+
+  // Get all leaves (HR/Admin)
+  getAll: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/leaves/all${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get leave statistics (HR/Admin)
+  getStats: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/leaves/stats${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Update leave status (HR/Admin) - approve/reject
+  updateStatus: async (id, status, comments = '') => {
+    return apiCall(`/leaves/status/${id}`, {
+      method: 'PUT',
+      body: { status, comments },
+    });
+  },
+};
+
+// Payroll API functions
+export const payrollAPI = {
+  // Get my payroll (Employee)
+  getMyPayroll: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/payroll/my${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get specific payslip (Employee)
+  getPayslip: async (id) => {
+    return apiCall(`/payroll/payslip/${id}`);
+  },
+
+  // Get all payrolls (HR/Admin)
+  getAll: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/payroll/all${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get payroll statistics (HR/Admin)
+  getStats: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/payroll/stats${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get employee payroll (HR/Admin)
+  getEmployeePayroll: async (employeeId, params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/payroll/employee/${employeeId}${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Generate payroll (HR/Admin)
+  generate: async (month, year) => {
+    return apiCall('/payroll/generate', {
+      method: 'POST',
+      body: { month, year },
+    });
+  },
+
+  // Update payroll (HR/Admin)
+  update: async (id, data) => {
+    return apiCall(`/payroll/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+  },
+
+  // Process payment (HR/Admin)
+  processPayment: async (id, data) => {
+    return apiCall(`/payroll/process/${id}`, {
+      method: 'POST',
+      body: data,
+    });
+  },
+
+  // Update salary structure (HR/Admin)
+  updateSalary: async (employeeId, data) => {
+    return apiCall(`/payroll/salary/${employeeId}`, {
+      method: 'PUT',
+      body: data,
+    });
+  },
+};
+
+// Export all APIs
 export default {
   authAPI,
+  employeeAPI,
+  attendanceAPI,
+  leaveAPI,
+  payrollAPI,
 };
