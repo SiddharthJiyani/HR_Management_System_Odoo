@@ -74,6 +74,9 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false);
   };
 
+  // Check if user is admin by role OR email
+  const isAdminUser = user?.role === 'admin' || user?.email === 'admin@gmail.com';
+
   const value = {
     user,
     isAuthenticated,
@@ -83,7 +86,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     isHR: user?.role === 'hr',
     isEmployee: user?.role === 'employee',
-    isAdmin: user?.role === 'admin',
+    isAdmin: isAdminUser,
   };
 
   return (

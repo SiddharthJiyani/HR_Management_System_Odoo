@@ -43,7 +43,8 @@ export const PublicRoute = ({ children }) => {
     
     // Admin users (including admin@gmail.com) go to admin dashboard
     if (isAdmin || user?.email === 'admin@gmail.com') {
-      redirectTo = '/admin/dashboard';
+      // Always redirect admin to dashboard, ignore saved location
+      return <Navigate to="/admin/dashboard" replace />;
     } else if (user?.role === 'hr') {
       redirectTo = '/dashboard';
     }
