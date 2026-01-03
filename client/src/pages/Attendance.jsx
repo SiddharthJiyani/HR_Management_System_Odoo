@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Button, Badge, Avatar, StatusDot } from '../components/ui';
+import { attendanceAPI } from '../services/api';
 
 const CalendarIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -89,11 +90,100 @@ const AttendanceRecord = ({ record }) => {
 
 const Attendance = ({ currentUser }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [stats, setStats] = useState({
+    present: 0,
+    absent: 0,
+    leave: 0,
+    late: 0,
+    avgHours: '0',
+    totalHours: '0',
+  });
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Format time from ISO string
+  const formatTime = (isoString) => {
+    if (!isoString) return null;
+    const date = new Date(isoString);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  };
+
+  // Transform API data to display format
+  const transformAttendanceData = (records) => {
+    return records.map(record => {
+      const date = new Date(record.date);
+      const dayOfWeek = date.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+      return {
+        day: date.getDate(),
+        dayName: dayNames[dayOfWeek],
+        status: isWeekend && !record.checkIn ? 'weekend' : record.status,
+        checkIn: formatTime(record.checkIn),
+        checkOut: formatTime(record.checkOut),
+        hours: record.hoursWorked ? record.hoursWorked.toFixed(1) : null,
+        note: record.notes || null,
+      };
+    });
+  };
+
+  // Fetch attendance data for the selected month
+  const fetchAttendance = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const month = currentMonth.getMonth() + 1; // API expects 1-12
+      const year = currentMonth.getFullYear();
+
+      const response = await attendanceAPI.getMyAttendance({ month, year });
+
+      if (response.success) {
+        const records = response.data || [];
+        setAttendanceRecords(transformAttendanceData(records));
+
+        // Calculate stats from records
+        const presentCount = records.filter(r => r.status === 'present').length;
+        const absentCount = records.filter(r => r.status === 'absent').length;
+        const leaveCount = records.filter(r => r.status === 'leave').length;
+        const lateCount = records.filter(r => r.status === 'late').length;
+        const totalHours = records.reduce((sum, r) => sum + (r.hoursWorked || 0), 0);
+        const workDays = records.filter(r => r.hoursWorked > 0).length;
+        const avgHours = workDays > 0 ? (totalHours / workDays).toFixed(1) : '0';
+
+        setStats({
+          present: presentCount,
+          absent: absentCount,
+          leave: leaveCount,
+          late: lateCount,
+          avgHours,
+          totalHours: totalHours.toFixed(0),
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching attendance:', err);
+      setError('Failed to load attendance data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentMonth]);
+
+  // Fetch data when month changes
+  useEffect(() => {
+    fetchAttendance();
+  }, [fetchAttendance]);
 
   const navigateMonth = (direction) => {
     setCurrentMonth(prev => {
@@ -101,29 +191,6 @@ const Attendance = ({ currentUser }) => {
       newDate.setMonth(prev.getMonth() + direction);
       return newDate;
     });
-  };
-
-  // Mock attendance data
-  const attendanceRecords = [
-    { day: 3, dayName: 'Fri', status: 'present', checkIn: '09:02 AM', checkOut: '06:15 PM', hours: '9.2' },
-    { day: 2, dayName: 'Thu', status: 'present', checkIn: '09:10 AM', checkOut: '06:30 PM', hours: '9.3' },
-    { day: 1, dayName: 'Wed', status: 'late', checkIn: '10:15 AM', checkOut: '07:00 PM', hours: '8.75', note: 'Traffic delay' },
-    { day: 31, dayName: 'Tue', status: 'present', checkIn: '08:55 AM', checkOut: '06:00 PM', hours: '9.1' },
-    { day: 30, dayName: 'Mon', status: 'present', checkIn: '09:00 AM', checkOut: '06:05 PM', hours: '9.1' },
-    { day: 29, dayName: 'Sun', status: 'weekend' },
-    { day: 28, dayName: 'Sat', status: 'weekend' },
-    { day: 27, dayName: 'Fri', status: 'leave', note: 'Personal leave' },
-    { day: 26, dayName: 'Thu', status: 'present', checkIn: '09:05 AM', checkOut: '06:20 PM', hours: '9.25' },
-  ];
-
-  // Summary stats
-  const stats = {
-    present: 18,
-    absent: 1,
-    leave: 2,
-    late: 2,
-    avgHours: '8.5',
-    totalHours: '162',
   };
 
   return (
@@ -175,18 +242,49 @@ const Attendance = ({ currentUser }) => {
         <h2 className="text-lg font-semibold text-neutral-900 mb-4">
           Recent Activity
         </h2>
-        <div className="space-y-2">
-          {attendanceRecords.map((record, index) => (
-            <AttendanceRecord key={index} record={record} />
-          ))}
-        </div>
+        
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="ml-3 text-gray-600">Loading attendance...</span>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <div className="flex flex-col items-center justify-center h-32 text-center">
+            <div className="text-red-500 text-sm mb-3">{error}</div>
+            <Button variant="outline" size="sm" onClick={fetchAttendance}>
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && attendanceRecords.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-32 text-center">
+            <p className="text-neutral-500">No attendance records for this month.</p>
+          </div>
+        )}
+
+        {/* Attendance Records */}
+        {!loading && !error && attendanceRecords.length > 0 && (
+          <div className="space-y-2">
+            {attendanceRecords.map((record, index) => (
+              <AttendanceRecord key={index} record={record} />
+            ))}
+          </div>
+        )}
 
         {/* Load More */}
-        <div className="mt-4 text-center">
-          <Button variant="ghost">
-            View Full History
-          </Button>
-        </div>
+        {!loading && attendanceRecords.length > 0 && (
+          <div className="mt-4 text-center">
+            <Button variant="ghost">
+              View Full History
+            </Button>
+          </div>
+        )}
       </Card>
 
       {/* Calendar View Toggle */}

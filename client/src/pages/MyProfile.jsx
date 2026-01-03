@@ -31,19 +31,25 @@ const MyProfile = ({ user, onBack, onSave }) => {
   });
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [saveMessage, setSaveMessage] = useState(null);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setHasChanges(true);
+    setSaveMessage(null);
   };
 
   const handleSave = async () => {
     setIsSaving(true);
+    setSaveMessage(null);
     try {
       await onSave?.(formData);
       setHasChanges(false);
+      setSaveMessage({ type: 'success', text: 'Profile updated successfully!' });
+      setTimeout(() => setSaveMessage(null), 3000);
     } catch (error) {
       console.error('Error saving profile:', error);
+      setSaveMessage({ type: 'error', text: error.message || 'Failed to save profile. Please try again.' });
     } finally {
       setIsSaving(false);
     }
@@ -56,16 +62,23 @@ const MyProfile = ({ user, onBack, onSave }) => {
         <Button variant="ghost" onClick={onBack} icon={<BackIcon />}>
           Back
         </Button>
-        {hasChanges && (
-          <Button 
-            variant="primary" 
-            onClick={handleSave}
-            disabled={isSaving}
-            icon={<SaveIcon />}
-          >
-            {isSaving ? 'Saving...' : 'Save Changes'}
-          </Button>
-        )}
+        <div className="flex items-center gap-3">
+          {saveMessage && (
+            <span className={`text-sm ${saveMessage.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+              {saveMessage.text}
+            </span>
+          )}
+          {hasChanges && (
+            <Button 
+              variant="primary" 
+              onClick={handleSave}
+              disabled={isSaving}
+              icon={<SaveIcon />}
+            >
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Profile Header Card */}

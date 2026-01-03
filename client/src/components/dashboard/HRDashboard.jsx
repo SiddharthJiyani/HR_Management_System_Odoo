@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainLayout } from '../layout';
 import { 
@@ -9,145 +9,73 @@ import {
   TimeOff 
 } from '../../pages';
 import { useAuth } from '../../context/AuthContext';
+import { employeeAPI, attendanceAPI } from '../../services/api';
 
-// Mock employee data
-const mockEmployees = [
-  {
-    id: 1,
-    name: 'Sarah Johnson',
-    email: 'sarah.johnson@dayflow.com',
-    phone: '+1 (555) 123-4567',
-    address: '123 Tech Park, San Francisco, CA 94105',
-    role: 'Senior Software Engineer',
-    department: 'Engineering',
-    employeeId: 'EMP001',
-    joinDate: 'March 15, 2022',
-    employmentType: 'Full-time',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
-    attendance: { present: 20, absent: 0, leave: 1, late: 1 },
-  },
-  {
-    id: 2,
-    name: 'Michael Chen',
-    email: 'michael.chen@dayflow.com',
-    phone: '+1 (555) 234-5678',
-    address: '456 Innovation Way, San Francisco, CA 94107',
-    role: 'Product Manager',
-    department: 'Product',
-    employeeId: 'EMP002',
-    joinDate: 'January 8, 2021',
-    employmentType: 'Full-time',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-    attendance: { present: 18, absent: 1, leave: 2, late: 0 },
-  },
-  {
-    id: 3,
-    name: 'Emily Rodriguez',
-    email: 'emily.rodriguez@dayflow.com',
-    phone: '+1 (555) 345-6789',
-    address: '789 Startup Blvd, San Francisco, CA 94110',
-    role: 'UX Designer',
-    department: 'Design',
-    employeeId: 'EMP003',
-    joinDate: 'June 22, 2023',
-    employmentType: 'Full-time',
-    status: 'leave',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-    attendance: { present: 15, absent: 0, leave: 5, late: 2 },
-  },
-  {
-    id: 4,
-    name: 'James Wilson',
-    email: 'james.wilson@dayflow.com',
-    phone: '+1 (555) 456-7890',
-    address: '321 Code Street, San Francisco, CA 94102',
-    role: 'DevOps Engineer',
-    department: 'Engineering',
-    employeeId: 'EMP004',
-    joinDate: 'September 5, 2022',
-    employmentType: 'Full-time',
-    status: 'absent',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
-    attendance: { present: 17, absent: 3, leave: 1, late: 1 },
-  },
-  {
-    id: 5,
-    name: 'Priya Patel',
-    email: 'priya.patel@dayflow.com',
-    phone: '+1 (555) 567-8901',
-    address: '654 Data Drive, San Francisco, CA 94103',
-    role: 'Data Analyst',
-    department: 'Analytics',
-    employeeId: 'EMP005',
-    joinDate: 'February 14, 2023',
-    employmentType: 'Full-time',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
-    attendance: { present: 19, absent: 0, leave: 2, late: 0 },
-  },
-  {
-    id: 6,
-    name: 'David Kim',
-    email: 'david.kim@dayflow.com',
-    phone: '+1 (555) 678-9012',
-    address: '987 Backend Ave, San Francisco, CA 94108',
-    role: 'Backend Developer',
-    department: 'Engineering',
-    employeeId: 'EMP006',
-    joinDate: 'November 1, 2021',
-    employmentType: 'Full-time',
-    status: 'not-checked-in',
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face',
-    attendance: { present: 16, absent: 2, leave: 3, late: 1 },
-  },
-  {
-    id: 7,
-    name: 'Lisa Thompson',
-    email: 'lisa.thompson@dayflow.com',
-    phone: '+1 (555) 789-0123',
-    address: '246 HR Lane, San Francisco, CA 94109',
-    role: 'HR Manager',
-    department: 'Human Resources',
-    employeeId: 'EMP007',
-    joinDate: 'April 20, 2020',
-    employmentType: 'Full-time',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
-    attendance: { present: 21, absent: 0, leave: 0, late: 0 },
-  },
-  {
-    id: 8,
-    name: 'Robert Martinez',
-    email: 'robert.martinez@dayflow.com',
-    phone: '+1 (555) 890-1234',
-    address: '135 Cloud Ct, San Francisco, CA 94111',
-    role: 'Cloud Architect',
-    department: 'Engineering',
-    employeeId: 'EMP008',
-    joinDate: 'July 12, 2022',
-    employmentType: 'Full-time',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-    attendance: { present: 18, absent: 1, leave: 2, late: 2 },
-  },
-  {
-    id: 9,
-    name: 'Amanda Foster',
-    email: 'amanda.foster@dayflow.com',
-    phone: '+1 (555) 901-2345',
-    address: '864 Finance Row, San Francisco, CA 94104',
-    role: 'Finance Lead',
-    department: 'Finance',
-    employeeId: 'EMP009',
-    joinDate: 'October 3, 2021',
-    employmentType: 'Full-time',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop&crop=face',
-    attendance: { present: 19, absent: 1, leave: 1, late: 0 },
-  },
-];
+// Helper function to format employee data from API
+const formatEmployeeData = (employee, todayAttendance = null) => {
+  const fullName = `${employee.firstName} ${employee.lastName}`.trim();
+  
+  // Determine status from today's attendance
+  let status = 'not-checked-in';
+  if (todayAttendance) {
+    if (todayAttendance.status === 'leave') status = 'leave';
+    else if (todayAttendance.status === 'absent') status = 'absent';
+    else if (todayAttendance.checkIn && !todayAttendance.checkOut) status = 'present';
+    else if (todayAttendance.checkIn && todayAttendance.checkOut) status = 'present';
+    else if (todayAttendance.status === 'late') status = 'present';
+  }
+
+  return {
+    id: employee._id,
+    name: fullName,
+    email: employee.email,
+    phone: employee.phone || 'Not provided',
+    address: employee.address ? 
+      `${employee.address.street || ''}, ${employee.address.city || ''}, ${employee.address.state || ''} ${employee.address.zipCode || ''}`.trim() : 
+      'Not provided',
+    role: employee.designation || employee.role || 'Employee',
+    department: employee.department || 'General',
+    employeeId: employee.employeeId,
+    joinDate: employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    }) : 'Not set',
+    employmentType: employee.employmentType || 'Full-time',
+    status: status,
+    avatar: employee.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=FFD966&color=000&size=150`,
+    attendance: employee.attendanceSummary || { present: 0, absent: 0, leave: 0, late: 0 },
+    // Keep original data for profile view
+    originalData: employee,
+  };
+};
+
+// Helper to format current user profile
+const formatCurrentUserProfile = (employee) => {
+  const fullName = `${employee.firstName} ${employee.lastName}`.trim();
+  
+  return {
+    id: employee._id,
+    name: fullName,
+    email: employee.email,
+    phone: employee.phone || '',
+    address: employee.address ? 
+      `${employee.address.street || ''}, ${employee.address.city || ''}, ${employee.address.state || ''} ${employee.address.zipCode || ''}`.trim() : 
+      '',
+    role: employee.designation || employee.role || 'Employee',
+    department: employee.department || 'General',
+    employeeId: employee.employeeId,
+    joinDate: employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    }) : 'Not set',
+    avatar: employee.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=FFD966&color=000&size=150`,
+    emergencyContact: employee.emergencyContact?.name || '',
+    emergencyPhone: employee.emergencyContact?.phone || '',
+    originalData: employee,
+  };
+};
 
 const HRDashboard = () => {
   const { user, logout } = useAuth();
@@ -165,24 +93,92 @@ const HRDashboard = () => {
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState(null);
   
-  // Current user from auth
-  const [currentUser, setCurrentUser] = useState({
-    id: user?.id || 1,
-    name: user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'HR User',
-    email: user?.email || 'hr@dayflow.com',
-    phone: '+1 (555) 123-4567',
-    address: '123 Tech Park, San Francisco, CA 94105',
-    role: 'HR Manager',
-    department: 'Human Resources',
-    employeeId: user?.employeeId || 'HR001',
-    joinDate: 'March 15, 2022',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
-    emergencyContact: 'John Doe',
-    emergencyPhone: '+1 (555) 999-8888',
-  });
+  // Loading and error states
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
-  // Employees state
-  const [employees] = useState(mockEmployees);
+  // Current user profile from API
+  const [currentUser, setCurrentUser] = useState(null);
+  
+  // Employees state from API
+  const [employees, setEmployees] = useState([]);
+
+  // Fetch employees from API
+  const fetchEmployees = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await employeeAPI.getAll();
+      
+      if (response.success && response.data) {
+        const formattedEmployees = response.data.map(emp => formatEmployeeData(emp));
+        setEmployees(formattedEmployees);
+      }
+    } catch (err) {
+      console.error('Error fetching employees:', err);
+      setError('Failed to load employees. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch current user's profile
+  const fetchMyProfile = useCallback(async () => {
+    try {
+      const response = await employeeAPI.getMyProfile();
+      
+      if (response.success && response.data) {
+        setCurrentUser(formatCurrentUserProfile(response.data));
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+      // Fallback to user from auth context if API fails
+      if (user) {
+        setCurrentUser({
+          id: user.id || user._id,
+          name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'HR User',
+          email: user.email || 'hr@dayflow.com',
+          phone: '',
+          address: '',
+          role: user.accountType || 'hr',
+          department: 'Human Resources',
+          employeeId: user.employeeId || 'HR001',
+          joinDate: 'Not set',
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(user.firstName || 'HR')}&background=FFD966&color=000&size=150`,
+          emergencyContact: '',
+          emergencyPhone: '',
+        });
+      }
+    }
+  }, [user]);
+
+  // Fetch today's attendance status
+  const fetchTodayStatus = useCallback(async () => {
+    try {
+      const response = await attendanceAPI.getTodayStatus();
+      
+      if (response.success && response.data) {
+        const todayRecord = response.data;
+        if (todayRecord.checkIn && !todayRecord.checkOut) {
+          setIsCheckedIn(true);
+          setCheckInTime(new Date(todayRecord.checkIn));
+        } else if (todayRecord.checkIn && todayRecord.checkOut) {
+          setIsCheckedIn(false);
+          setCheckInTime(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching today status:', err);
+      // Not critical, just log the error
+    }
+  }, []);
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchEmployees();
+    fetchMyProfile();
+    fetchTodayStatus();
+  }, [fetchEmployees, fetchMyProfile, fetchTodayStatus]);
 
   // Calculate user status based on check-in
   const userStatus = isCheckedIn ? 'present' : 'not-checked-in';
@@ -225,24 +221,70 @@ const HRDashboard = () => {
   }, []);
 
   // Attendance handlers
-  const handleCheckIn = useCallback(() => {
-    setIsCheckedIn(true);
-    setCheckInTime(new Date());
-  }, []);
+  const handleCheckIn = useCallback(async () => {
+    try {
+      const response = await attendanceAPI.checkIn();
+      
+      if (response.success) {
+        setIsCheckedIn(true);
+        setCheckInTime(new Date());
+        // Refresh employees to update status
+        fetchEmployees();
+      }
+    } catch (err) {
+      console.error('Check-in error:', err);
+      alert('Failed to check in. Please try again.');
+    }
+  }, [fetchEmployees]);
 
-  const handleCheckOut = useCallback(() => {
-    setIsCheckedIn(false);
-    setCheckInTime(null);
-  }, []);
+  const handleCheckOut = useCallback(async () => {
+    try {
+      const response = await attendanceAPI.checkOut();
+      
+      if (response.success) {
+        setIsCheckedIn(false);
+        setCheckInTime(null);
+        // Refresh employees to update status
+        fetchEmployees();
+      }
+    } catch (err) {
+      console.error('Check-out error:', err);
+      alert('Failed to check out. Please try again.');
+    }
+  }, [fetchEmployees]);
 
   // Profile save handler
-  const handleSaveProfile = useCallback((data) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        setCurrentUser(prev => ({ ...prev, ...data }));
-        resolve();
-      }, 500);
-    });
+  const handleSaveProfile = useCallback(async (data) => {
+    try {
+      // Transform data for API
+      const apiData = {
+        firstName: data.name?.split(' ')[0] || '',
+        lastName: data.name?.split(' ').slice(1).join(' ') || '',
+        phone: data.phone,
+        address: {
+          street: data.address?.split(',')[0]?.trim() || '',
+          city: data.address?.split(',')[1]?.trim() || '',
+          state: data.address?.split(',')[2]?.trim()?.split(' ')[0] || '',
+          zipCode: data.address?.split(',')[2]?.trim()?.split(' ')[1] || '',
+        },
+        emergencyContact: {
+          name: data.emergencyContact,
+          phone: data.emergencyPhone,
+        },
+      };
+
+      const response = await employeeAPI.updateMyProfile(apiData);
+      
+      if (response.success && response.data) {
+        setCurrentUser(formatCurrentUserProfile(response.data));
+        return response;
+      }
+      
+      throw new Error(response.message || 'Failed to update profile');
+    } catch (err) {
+      console.error('Save profile error:', err);
+      throw err;
+    }
   }, []);
 
   // Render the appropriate page content
@@ -261,7 +303,7 @@ const HRDashboard = () => {
     if (showMyProfile) {
       return (
         <MyProfile 
-          user={currentUser}
+          user={currentUser || {}}
           onBack={handleBack}
           onSave={handleSaveProfile}
         />
@@ -271,6 +313,31 @@ const HRDashboard = () => {
     // Main page content based on current page
     switch (currentPage) {
       case 'employees':
+        // Show loading state
+        if (loading) {
+          return (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              <span className="ml-3 text-gray-600">Loading employees...</span>
+            </div>
+          );
+        }
+
+        // Show error state
+        if (error) {
+          return (
+            <div className="flex flex-col items-center justify-center h-64 text-center">
+              <div className="text-red-500 text-lg mb-4">{error}</div>
+              <button 
+                onClick={fetchEmployees}
+                className="px-4 py-2 bg-primary text-black rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          );
+        }
+
         return (
           <EmployeeDirectory 
             employees={employees}
@@ -280,7 +347,7 @@ const HRDashboard = () => {
           />
         );
       case 'attendance':
-        return <Attendance currentUser={currentUser} />;
+        return <Attendance currentUser={currentUser || {}} />;
       case 'timeoff':
         return <TimeOff />;
       default:
@@ -301,7 +368,7 @@ const HRDashboard = () => {
       onNavigate={handleNavigate}
       searchValue={searchValue}
       onSearch={setSearchValue}
-      currentUser={currentUser}
+      currentUser={currentUser || { name: 'Loading...', email: '', avatar: '' }}
       userStatus={userStatus}
       onMyProfile={handleMyProfile}
       onLogout={handleLogout}
