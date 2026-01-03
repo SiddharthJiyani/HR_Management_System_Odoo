@@ -172,14 +172,24 @@ exports.getMyAttendance = async (req, res) => {
       Attendance.getEmployeeSummary(employee._id, startDate, endDate)
     ]);
 
+    // Format records for frontend - include checkIn/checkOut times directly
+    const formattedRecords = attendance.map(record => ({
+      _id: record._id,
+      date: record.date,
+      checkIn: record.checkIn?.time || null,
+      checkOut: record.checkOut?.time || null,
+      status: record.status,
+      totalHours: record.totalHours,
+      overtimeHours: record.overtimeHours,
+      note: record.note
+    }));
+
     res.status(200).json({
       success: true,
-      data: {
-        records: attendance,
-        summary,
-        month: targetMonth + 1,
-        year: targetYear
-      }
+      data: formattedRecords,
+      summary,
+      month: targetMonth + 1,
+      year: targetYear
     });
   } catch (error) {
     console.error('Get my attendance error:', error);
@@ -252,12 +262,14 @@ exports.getAllAttendance = async (req, res) => {
     // Get attendance for all employees for the date
     const attendanceRecords = await Attendance.find({
       date: targetDate
-    }).populate('employee', 'firstName lastName email employeeId department designation profilePhoto');
+    });
 
-    // Create a map for quick lookup
+    // Create a map for quick lookup using employee ID string
     const attendanceMap = new Map();
     attendanceRecords.forEach(record => {
-      attendanceMap.set(record.employee._id.toString(), record);
+      if (record.employee) {
+        attendanceMap.set(record.employee.toString(), record);
+      }
     });
 
     // Combine employees with their attendance - format for frontend
@@ -439,6 +451,336 @@ exports.markAttendance = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to mark attendance'
+    });
+  }
+};
+// Get attendance for a week (HR/Admin)
+exports.getWeekAttendance = async (req, res) => {
+  try {
+    const { startDate: startDateStr, department } = req.query;
+
+    // Calculate week start and end
+    const startDate = startDateStr ? new Date(startDateStr) : new Date();
+    startDate.setHours(0, 0, 0, 0);
+    
+    // Get start of week (Monday)
+    const dayOfWeek = startDate.getDay();
+    const diff = startDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    const weekStart = new Date(startDate);
+    weekStart.setDate(diff);
+    
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+
+    // Get employees
+    const employeeQuery = { status: 'active' };
+    if (department) {
+      employeeQuery.department = department;
+    }
+
+    const employees = await Employee.find(employeeQuery)
+      .select('firstName lastName email employeeId department designation profilePhoto');
+
+    // Get attendance for the week
+    const attendanceRecords = await Attendance.find({
+      date: { $gte: weekStart, $lte: weekEnd }
+    });
+
+    // Create a map for quick lookup
+    const attendanceMap = new Map();
+    attendanceRecords.forEach(record => {
+      const key = `${record.employee.toString()}_${record.date.toISOString().split('T')[0]}`;
+      attendanceMap.set(key, record);
+    });
+
+    // Generate week days
+    const weekDays = [];
+    for (let d = new Date(weekStart); d <= weekEnd; d.setDate(d.getDate() + 1)) {
+      weekDays.push(new Date(d).toISOString().split('T')[0]);
+    }
+
+    // Combine employees with their weekly attendance
+    const result = employees.map(emp => {
+      const fullName = `${emp.firstName} ${emp.lastName}`.trim();
+      const weeklyAttendance = {};
+      
+      weekDays.forEach(day => {
+        const key = `${emp._id.toString()}_${day}`;
+        const attendance = attendanceMap.get(key);
+        weeklyAttendance[day] = {
+          checkIn: attendance?.checkIn?.time || null,
+          checkOut: attendance?.checkOut?.time || null,
+          status: attendance?.status || 'not-checked-in',
+          totalHours: attendance?.totalHours || 0
+        };
+      });
+
+      return {
+        employeeId: emp._id,
+        employeeName: fullName,
+        department: emp.department,
+        avatar: emp.profilePhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=FFD966&color=000&size=150`,
+        weeklyAttendance
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result,
+      weekStart: weekStart.toISOString().split('T')[0],
+      weekEnd: weekEnd.toISOString().split('T')[0],
+      weekDays
+    });
+  } catch (error) {
+    console.error('Get week attendance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch week attendance'
+    });
+  }
+};
+
+// Get monthly attendance summary (HR/Admin)
+exports.getMonthSummary = async (req, res) => {
+  try {
+    const { month, year, department } = req.query;
+
+    const currentDate = new Date();
+    const targetMonth = month ? parseInt(month) - 1 : currentDate.getMonth();
+    const targetYear = year ? parseInt(year) : currentDate.getFullYear();
+
+    const startDate = new Date(targetYear, targetMonth, 1);
+    const endDate = new Date(targetYear, targetMonth + 1, 0);
+
+    // Get employees
+    const employeeQuery = { status: 'active' };
+    if (department) {
+      employeeQuery.department = department;
+    }
+
+    const employees = await Employee.find(employeeQuery)
+      .select('firstName lastName email employeeId department designation profilePhoto');
+
+    // Get attendance summary for each employee
+    const summaries = await Promise.all(
+      employees.map(async (emp) => {
+        const summary = await Attendance.getEmployeeSummary(emp._id, startDate, endDate);
+        const fullName = `${emp.firstName} ${emp.lastName}`.trim();
+        
+        return {
+          employeeId: emp._id,
+          employeeName: fullName,
+          department: emp.department,
+          avatar: emp.profilePhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=FFD966&color=000&size=150`,
+          ...summary
+        };
+      })
+    );
+
+    // Calculate overall stats
+    const overallStats = summaries.reduce((acc, s) => ({
+      totalPresent: acc.totalPresent + s.present,
+      totalAbsent: acc.totalAbsent + s.absent,
+      totalLeave: acc.totalLeave + s.leave,
+      totalLate: acc.totalLate + s.late,
+      totalHours: acc.totalHours + s.totalHours
+    }), { totalPresent: 0, totalAbsent: 0, totalLeave: 0, totalLate: 0, totalHours: 0 });
+
+    res.status(200).json({
+      success: true,
+      data: summaries,
+      stats: overallStats,
+      month: targetMonth + 1,
+      year: targetYear
+    });
+  } catch (error) {
+    console.error('Get month summary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch month summary'
+    });
+  }
+};
+
+// Request attendance regularization (Employee)
+exports.requestRegularization = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { date, reason, checkIn, checkOut } = req.body;
+
+    // Get employee
+    const employee = await Employee.findOne({ user: userId });
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    const attendanceDate = new Date(date);
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    // Check if attendance exists
+    let attendance = await Attendance.findOne({
+      employee: employee._id,
+      date: attendanceDate
+    });
+
+    if (!attendance) {
+      // Create new attendance record with regularization request
+      attendance = new Attendance({
+        employee: employee._id,
+        date: attendanceDate,
+        status: 'absent',
+        isRegularized: false,
+        regularizationReason: reason,
+        regularizationRequest: {
+          requestedCheckIn: checkIn ? new Date(checkIn) : null,
+          requestedCheckOut: checkOut ? new Date(checkOut) : null,
+          status: 'pending',
+          requestedAt: new Date()
+        }
+      });
+    } else {
+      // Update existing attendance with regularization request
+      attendance.isRegularized = false;
+      attendance.regularizationReason = reason;
+      attendance.regularizationRequest = {
+        requestedCheckIn: checkIn ? new Date(checkIn) : null,
+        requestedCheckOut: checkOut ? new Date(checkOut) : null,
+        status: 'pending',
+        requestedAt: new Date()
+      };
+    }
+
+    await attendance.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Regularization request submitted successfully',
+      data: attendance
+    });
+  } catch (error) {
+    console.error('Request regularization error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to submit regularization request'
+    });
+  }
+};
+
+// Approve/Reject regularization (HR/Admin)
+exports.handleRegularization = async (req, res) => {
+  try {
+    const { attendanceId } = req.params;
+    const { action, comments } = req.body; // action: 'approve' | 'reject'
+    const approvedBy = req.user.id;
+
+    const attendance = await Attendance.findById(attendanceId);
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attendance record not found'
+      });
+    }
+
+    if (!attendance.regularizationRequest) {
+      return res.status(400).json({
+        success: false,
+        message: 'No regularization request found'
+      });
+    }
+
+    if (action === 'approve') {
+      // Apply the requested times
+      if (attendance.regularizationRequest.requestedCheckIn) {
+        attendance.checkIn = {
+          time: attendance.regularizationRequest.requestedCheckIn,
+          method: 'manual'
+        };
+      }
+      if (attendance.regularizationRequest.requestedCheckOut) {
+        attendance.checkOut = {
+          time: attendance.regularizationRequest.requestedCheckOut,
+          method: 'manual'
+        };
+      }
+      attendance.status = 'present';
+      attendance.isRegularized = true;
+      attendance.regularizationRequest.status = 'approved';
+    } else {
+      attendance.regularizationRequest.status = 'rejected';
+    }
+
+    attendance.regularizationRequest.approvedBy = approvedBy;
+    attendance.regularizationRequest.approvedAt = new Date();
+    attendance.regularizationRequest.comments = comments || '';
+
+    await attendance.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Regularization ${action}d successfully`,
+      data: attendance
+    });
+  } catch (error) {
+    console.error('Handle regularization error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process regularization'
+    });
+  }
+};
+
+// Get pending regularization requests (HR/Admin)
+exports.getPendingRegularizations = async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+
+    const attendance = await Attendance.find({
+      'regularizationRequest.status': 'pending'
+    })
+      .populate('employee', 'firstName lastName email employeeId department')
+      .sort({ 'regularizationRequest.requestedAt': -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await Attendance.countDocuments({
+      'regularizationRequest.status': 'pending'
+    });
+
+    const formattedData = attendance.map(record => ({
+      _id: record._id,
+      employee: {
+        _id: record.employee._id,
+        name: `${record.employee.firstName} ${record.employee.lastName}`,
+        email: record.employee.email,
+        employeeId: record.employee.employeeId,
+        department: record.employee.department
+      },
+      date: record.date,
+      currentStatus: record.status,
+      requestedCheckIn: record.regularizationRequest?.requestedCheckIn,
+      requestedCheckOut: record.regularizationRequest?.requestedCheckOut,
+      reason: record.regularizationReason,
+      requestedAt: record.regularizationRequest?.requestedAt
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: formattedData,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get pending regularizations error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch regularization requests'
     });
   }
 };

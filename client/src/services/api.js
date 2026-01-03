@@ -171,10 +171,22 @@ export const attendanceAPI = {
     return apiCall('/attendance/today');
   },
 
-  // Get all attendance (HR/Admin)
+  // Get all attendance (HR/Admin) - for a single day
   getAll: async (params = {}) => {
     const queryString = new URLSearchParams(params).toString();
     return apiCall(`/attendance/all${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get week attendance (HR/Admin)
+  getWeekAttendance: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/attendance/week${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get month summary (HR/Admin)
+  getMonthSummary: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/attendance/month-summary${queryString ? `?${queryString}` : ''}`);
   },
 
   // Get employee attendance
@@ -187,6 +199,28 @@ export const attendanceAPI = {
   mark: async (data) => {
     return apiCall('/attendance/mark', {
       method: 'POST',
+      body: data,
+    });
+  },
+
+  // Request attendance regularization (Employee)
+  requestRegularization: async (data) => {
+    return apiCall('/attendance/regularization', {
+      method: 'POST',
+      body: data,
+    });
+  },
+
+  // Get pending regularization requests (HR/Admin)
+  getPendingRegularizations: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiCall(`/attendance/regularizations${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Handle regularization request (HR/Admin)
+  handleRegularization: async (attendanceId, data) => {
+    return apiCall(`/attendance/regularization/${attendanceId}`, {
+      method: 'PUT',
       body: data,
     });
   },
@@ -206,6 +240,11 @@ export const leaveAPI = {
   getMyLeaves: async (params = {}) => {
     const queryString = new URLSearchParams(params).toString();
     return apiCall(`/leaves/my${queryString ? `?${queryString}` : ''}`);
+  },
+
+  // Get leave balance
+  getBalance: async () => {
+    return apiCall('/leaves/balance');
   },
 
   // Cancel leave
@@ -233,6 +272,22 @@ export const leaveAPI = {
     return apiCall(`/leaves/status/${id}`, {
       method: 'PUT',
       body: { status, comments },
+    });
+  },
+
+  // Approve leave (HR/Admin) - convenience method
+  approve: async (id, comments = '') => {
+    return apiCall(`/leaves/status/${id}`, {
+      method: 'PUT',
+      body: { status: 'approved', comments },
+    });
+  },
+
+  // Reject leave (HR/Admin) - convenience method
+  reject: async (id, comments = '') => {
+    return apiCall(`/leaves/status/${id}`, {
+      method: 'PUT',
+      body: { status: 'rejected', comments },
     });
   },
 };

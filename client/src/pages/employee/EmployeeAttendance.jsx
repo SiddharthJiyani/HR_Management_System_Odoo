@@ -310,7 +310,7 @@ const EmployeeAttendance = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDate, generateMockData]);
+  }, [selectedDate]);
 
   useEffect(() => {
     fetchAttendance();

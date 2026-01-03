@@ -67,6 +67,19 @@ const attendanceSchema = new mongoose.Schema({
   regularizationReason: {
     type: String,
     default: ''
+  },
+  regularizationRequest: {
+    requestedCheckIn: { type: Date },
+    requestedCheckOut: { type: Date },
+    status: { 
+      type: String, 
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending'
+    },
+    requestedAt: { type: Date },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    approvedAt: { type: Date },
+    comments: { type: String, default: '' }
   }
 
 }, {

@@ -224,6 +224,8 @@ const Attendance = ({ isAdmin = false }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [weekData, setWeekData] = useState(null);
+  const [monthData, setMonthData] = useState(null);
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -265,21 +267,52 @@ const Attendance = ({ isAdmin = false }) => {
       setLoading(true);
       setError(null);
 
+      // Try to fetch from API first
       try {
-        const response = await attendanceAPI.getAllAttendance({
+        const response = await attendanceAPI.getAll({
           date: selectedDate.toISOString().split('T')[0],
         });
 
         if (response.success && response.data?.length > 0) {
           setAttendanceRecords(response.data);
+          
+          // Calculate stats from response or data
+          if (response.stats) {
+            setStats({
+              present: response.stats.present || 0,
+              absent: response.stats.absent || 0,
+              onLeave: response.stats.leave || 0,
+              late: response.stats.late || 0,
+              totalHours: '0',
+              avgHours: '0'
+            });
+          } else {
+            // Calculate stats from data
+            const present = response.data.filter(r => r.status === 'present').length;
+            const absent = response.data.filter(r => r.status === 'absent' || r.status === 'not-checked-in').length;
+            const onLeave = response.data.filter(r => r.status === 'leave').length;
+            const late = response.data.filter(r => r.status === 'late').length;
+
+            setStats({ present, absent, onLeave, late, totalHours: '0', avgHours: '0' });
+          }
           return;
         }
       } catch (apiError) {
-        console.log('API not available, using mock data');
+        console.log('API error:', apiError);
+        console.log('Using mock data');
       }
 
       // Fallback to mock data
-      setAttendanceRecords(generateMockData());
+      const mockData = generateMockData();
+      setAttendanceRecords(mockData);
+
+      // Calculate stats
+      const present = mockData.filter(r => r.status === 'present').length;
+      const absent = mockData.filter(r => r.status === 'absent').length;
+      const onLeave = mockData.filter(r => r.status === 'leave').length;
+      const late = mockData.filter(r => r.status === 'late').length;
+
+      setStats({ present, absent, onLeave, late, totalHours: '48', avgHours: '8.5' });
 
     } catch (err) {
       console.error('Error fetching attendance:', err);
@@ -287,7 +320,7 @@ const Attendance = ({ isAdmin = false }) => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDate, generateMockData]);
+  }, [selectedDate, viewMode]);
 
   useEffect(() => {
     fetchAttendance();

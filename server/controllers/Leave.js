@@ -44,6 +44,7 @@ exports.applyLeave = async (req, res) => {
 
     // Map leave types to balance keys
     const leaveTypeToKey = {
+      'paid': 'vacation',
       'annual': 'vacation',
       'vacation': 'vacation',
       'sick': 'sick',
@@ -63,12 +64,15 @@ exports.applyLeave = async (req, res) => {
       });
     }
 
+    // Generate title if not provided
+    const leaveTitle = title || `${leaveType.charAt(0).toUpperCase() + leaveType.slice(1)} Leave Request`;
+
     // Create leave request
     const leave = await Leave.create({
       employee: employee._id,
       leaveType,
-      title,
-      reason,
+      title: leaveTitle,
+      reason: reason || '',
       startDate: start,
       endDate: end,
       totalDays,
@@ -177,6 +181,60 @@ exports.getMyLeaves = async (req, res) => {
   }
 };
 
+// Get leave balance (Employee)
+exports.getLeaveBalance = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get employee
+    const employee = await Employee.findOne({ user: userId });
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    // Get leave balance from employee
+    const leaveBalance = employee.leaveBalance || {
+      vacation: 24,
+      sick: 10,
+      personal: 5
+    };
+
+    // Get used leaves for current year
+    const currentYear = new Date().getFullYear();
+    const leaveSummary = await Leave.getEmployeeLeaveSummary(employee._id, currentYear);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        paid: {
+          total: leaveBalance.vacation || 24,
+          used: leaveSummary.vacation?.used || 0,
+          remaining: (leaveBalance.vacation || 24) - (leaveSummary.vacation?.used || 0)
+        },
+        sick: {
+          total: leaveBalance.sick || 10,
+          used: leaveSummary.sick?.used || 0,
+          remaining: (leaveBalance.sick || 10) - (leaveSummary.sick?.used || 0)
+        },
+        unpaid: {
+          total: 0,
+          used: leaveSummary.unpaid?.used || 0,
+          remaining: 0
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get leave balance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch leave balance'
+    });
+  }
+};
+
 // Cancel leave request (Employee)
 exports.cancelLeave = async (req, res) => {
   try {
@@ -254,7 +312,7 @@ exports.cancelLeave = async (req, res) => {
 // Get all leave requests (HR/Admin)
 exports.getAllLeaves = async (req, res) => {
   try {
-    const { status, department, startDate, endDate, page = 1, limit = 20 } = req.query;
+    const { status, department, startDate, endDate, page = 1, limit = 50 } = req.query;
 
     // Build employee filter
     const employeeQuery = { status: 'active' };
@@ -288,16 +346,29 @@ exports.getAllLeaves = async (req, res) => {
       Leave.countDocuments({ ...query, status: 'pending' })
     ]);
 
+    // Format for frontend - return flat array with employee info included
+    const formattedLeaves = leaves.map(leave => ({
+      _id: leave._id,
+      employeeId: leave.employee,
+      startDate: leave.startDate,
+      endDate: leave.endDate,
+      leaveType: leave.leaveType,
+      status: leave.status,
+      totalDays: leave.totalDays,
+      reason: leave.reason,
+      title: leave.title,
+      adminComments: leave.adminComments,
+      createdAt: leave.createdAt
+    }));
+
     res.status(200).json({
       success: true,
-      data: {
-        leaves,
-        pendingCount,
-        pagination: {
-          total,
-          page: parseInt(page),
-          pages: Math.ceil(total / limit)
-        }
+      data: formattedLeaves,
+      pendingCount,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit)
       }
     });
   } catch (error) {
@@ -316,6 +387,8 @@ exports.updateLeaveStatus = async (req, res) => {
     const { status, comments } = req.body;
     const approver = req.user;
 
+    console.log('Updating leave status:', { id, status, comments, approverId: approver?.id });
+
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({
         success: false,
@@ -323,7 +396,8 @@ exports.updateLeaveStatus = async (req, res) => {
       });
     }
 
-    const leave = await Leave.findById(id).populate('employee');
+    // Find the leave request first
+    const leave = await Leave.findById(id);
 
     if (!leave) {
       return res.status(404).json({
@@ -331,6 +405,8 @@ exports.updateLeaveStatus = async (req, res) => {
         message: 'Leave request not found'
       });
     }
+
+    console.log('Found leave:', { leaveId: leave._id, employeeId: leave.employee, leaveType: leave.leaveType, totalDays: leave.totalDays });
 
     if (leave.status !== 'pending') {
       return res.status(400).json({
@@ -347,15 +423,56 @@ exports.updateLeaveStatus = async (req, res) => {
       leave.approvedBy = approver.id;
       leave.approvedAt = new Date();
 
-      // Deduct from leave balance
-      const employee = leave.employee;
-      const leaveTypeKey = leave.leaveType === 'vacation' ? 'vacation' : 
-                          leave.leaveType === 'sick' ? 'sick' : 
-                          leave.leaveType === 'personal' ? 'personal' : null;
+      // Fetch employee separately to update balance
+      const employee = await Employee.findById(leave.employee);
       
-      if (leaveTypeKey && employee.leaveBalance[leaveTypeKey] >= leave.totalDays) {
-        employee.leaveBalance[leaveTypeKey] -= leave.totalDays;
-        await employee.save();
+      if (employee) {
+        console.log('Found employee:', { employeeId: employee._id, currentBalance: employee.leaveBalance });
+        
+        // Initialize leaveBalance if it doesn't exist
+        if (!employee.leaveBalance) {
+          employee.leaveBalance = {
+            vacation: 20,
+            sick: 10,
+            personal: 5,
+            unpaid: 0
+          };
+        }
+        
+        // Map leave types to balance keys
+        const leaveTypeToKey = {
+          'paid': 'vacation',
+          'annual': 'vacation',
+          'vacation': 'vacation',
+          'sick': 'sick',
+          'casual': 'personal',
+          'personal': 'personal',
+          'maternity': 'unpaid',
+          'paternity': 'unpaid',
+          'unpaid': 'unpaid'
+        };
+        
+        const leaveTypeKey = leaveTypeToKey[leave.leaveType];
+        console.log('Leave type mapping:', { leaveType: leave.leaveType, leaveTypeKey });
+        
+        // Deduct balance only for paid leave types
+        if (leaveTypeKey && leaveTypeKey !== 'unpaid') {
+          // Ensure the balance field exists
+          if (typeof employee.leaveBalance[leaveTypeKey] !== 'number') {
+            employee.leaveBalance[leaveTypeKey] = leaveTypeKey === 'vacation' ? 20 : leaveTypeKey === 'sick' ? 10 : 5;
+          }
+          
+          // Check if sufficient balance
+          if (employee.leaveBalance[leaveTypeKey] >= leave.totalDays) {
+            employee.leaveBalance[leaveTypeKey] -= leave.totalDays;
+            await employee.save();
+            console.log('Balance deducted successfully:', { newBalance: employee.leaveBalance[leaveTypeKey] });
+          } else {
+            console.warn(`Warning: Insufficient leave balance. Available: ${employee.leaveBalance[leaveTypeKey]}, Requested: ${leave.totalDays}`);
+          }
+        }
+      } else {
+        console.warn('Employee not found for leave request, but still approving leave');
       }
     } else {
       leave.rejectedBy = approver.id;
@@ -363,6 +480,7 @@ exports.updateLeaveStatus = async (req, res) => {
     }
 
     await leave.save();
+    console.log('Leave saved successfully with status:', leave.status);
 
     res.status(200).json({
       success: true,
@@ -370,10 +488,12 @@ exports.updateLeaveStatus = async (req, res) => {
       data: leave
     });
   } catch (error) {
-    console.error('Update leave status error:', error);
+    console.error('Update leave status error:', error.message);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Failed to update leave status'
+      message: 'Failed to update leave status',
+      error: error.message
     });
   }
 };

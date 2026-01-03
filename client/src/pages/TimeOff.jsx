@@ -384,7 +384,7 @@ const TimeOff = ({ isAdmin = false, isHR = false }) => {
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [leaveBalance, setLeaveBalance] = useState({
     paid: 24,
-    sick: 7,
+    sick: 10,
   });
 
   const isAdminOrHR = isAdmin || isHR;
@@ -393,49 +393,27 @@ const TimeOff = ({ isAdmin = false, isHR = false }) => {
   // Format date for display
   const formatDate = (dateString) => {
     if (!dateString) return '—';
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('en-GB', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
     });
   };
 
-  // Generate mock data
-  const generateMockData = useCallback(() => {
-    if (isAdminOrHR) {
-      // Show all employees for admin/HR
-      const employees = [
-        { id: 1, name: 'Sarah Johnson', department: 'Engineering', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face' },
-        { id: 2, name: 'Michael Chen', department: 'Product', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face' },
-        { id: 3, name: 'Emily Rodriguez', department: 'Design', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face' },
-      ];
-      const types = ['paid', 'sick', 'unpaid'];
-      const statuses = ['pending', 'pending', 'approved'];
-
-      return employees.map((emp, idx) => ({
-        id: `leave-${idx + 1}`,
-        employeeName: emp.name,
-        department: emp.department,
-        avatar: emp.avatar,
-        startDate: formatDate(new Date(2025, 0, 15 + idx * 5)),
-        endDate: formatDate(new Date(2025, 0, 17 + idx * 5)),
-        type: types[idx % types.length],
-        status: statuses[idx % statuses.length],
-      }));
-    } else {
-      // Show only employee's own requests
-      return [
-        {
-          id: 'leave-1',
-          employeeName: employeeName,
-          startDate: formatDate(new Date(2025, 9, 28)),
-          endDate: formatDate(new Date(2025, 9, 28)),
-          type: 'paid',
-          status: 'pending',
-        },
-      ];
+  // Fetch leave balance
+  const fetchLeaveBalance = useCallback(async () => {
+    try {
+      const response = await leaveAPI.getBalance();
+      if (response.success && response.data) {
+        setLeaveBalance({
+          paid: response.data.paid?.remaining || 24,
+          sick: response.data.sick?.remaining || 10,
+        });
+      }
+    } catch (err) {
+      console.log('Could not fetch leave balance:', err);
     }
-  }, [isAdminOrHR, employeeName]);
+  }, []);
 
   // Fetch leave requests
   const fetchLeaves = useCallback(async () => {
@@ -443,32 +421,33 @@ const TimeOff = ({ isAdmin = false, isHR = false }) => {
       setLoading(true);
       setError(null);
 
-      try {
-        const response = isAdminOrHR 
-          ? await leaveAPI.getAll() 
-          : await leaveAPI.getMyLeaves();
+      const response = isAdminOrHR 
+        ? await leaveAPI.getAll() 
+        : await leaveAPI.getMyLeaves();
 
-        if (response.success && response.data?.length > 0) {
-          const formattedLeaves = response.data.map(leave => ({
-            id: leave._id,
-            employeeName: leave.employeeId?.firstName 
-              ? `${leave.employeeId.firstName} ${leave.employeeId.lastName || ''}`.trim()
-              : employeeName,
-            department: leave.employeeId?.department || 'N/A',
-            avatar: leave.employeeId?.profileImage,
-            startDate: formatDate(leave.startDate),
-            endDate: formatDate(leave.endDate),
-            type: leave.leaveType,
-            status: leave.status,
-          }));
-          setLeaveRequests(formattedLeaves);
-          return;
-        }
-      } catch (apiError) {
-        console.log('API not available, using mock data');
+      if (response.success && response.data) {
+        const dataArray = Array.isArray(response.data) ? response.data : [];
+        const formattedLeaves = dataArray.map(leave => ({
+          id: leave._id,
+          employeeName: leave.employeeId?.firstName 
+            ? `${leave.employeeId.firstName} ${leave.employeeId.lastName || ''}`.trim()
+            : employeeName,
+          department: leave.employeeId?.department || 'N/A',
+          avatar: leave.employeeId?.profilePhoto || leave.employeeId?.profileImage,
+          startDate: formatDate(leave.startDate),
+          endDate: formatDate(leave.endDate),
+          type: leave.leaveType,
+          status: leave.status,
+        }));
+        setLeaveRequests(formattedLeaves);
+      } else {
+        setLeaveRequests([]);
       }
 
-      setLeaveRequests(generateMockData());
+      // Also fetch balance for employees
+      if (!isAdminOrHR) {
+        await fetchLeaveBalance();
+      }
 
     } catch (err) {
       console.error('Error fetching leaves:', err);
@@ -476,7 +455,7 @@ const TimeOff = ({ isAdmin = false, isHR = false }) => {
     } finally {
       setLoading(false);
     }
-  }, [isAdminOrHR, generateMockData, employeeName]);
+  }, [isAdminOrHR, employeeName, fetchLeaveBalance]);
 
   useEffect(() => {
     fetchLeaves();
@@ -487,16 +466,18 @@ const TimeOff = ({ isAdmin = false, isHR = false }) => {
     if (!confirm('Approve this leave request?')) return;
     try {
       setProcessing(true);
-      try {
-        await leaveAPI.approve(requestId);
-        fetchLeaves();
-        return;
-      } catch (e) {
-        console.log('API error');
+      const response = await leaveAPI.approve(requestId);
+      if (response.success) {
+        await fetchLeaves();
+        if (!isAdminOrHR) {
+          await fetchLeaveBalance();
+        }
+      } else {
+        alert(response.message || 'Failed to approve');
       }
-      setLeaveRequests(prev => 
-        prev.map(req => req.id === requestId ? { ...req, status: 'approved' } : req)
-      );
+    } catch (e) {
+      console.error('Approve error:', e);
+      alert('Failed to approve leave request');
     } finally {
       setProcessing(false);
     }
@@ -507,16 +488,18 @@ const TimeOff = ({ isAdmin = false, isHR = false }) => {
     if (!confirm('Reject this leave request?')) return;
     try {
       setProcessing(true);
-      try {
-        await leaveAPI.reject(requestId, 'Rejected');
-        fetchLeaves();
-        return;
-      } catch (e) {
-        console.log('API error');
+      const response = await leaveAPI.reject(requestId, 'Rejected by admin');
+      if (response.success) {
+        await fetchLeaves();
+        if (!isAdminOrHR) {
+          await fetchLeaveBalance();
+        }
+      } else {
+        alert(response.message || 'Failed to reject');
       }
-      setLeaveRequests(prev => 
-        prev.map(req => req.id === requestId ? { ...req, status: 'rejected' } : req)
-      );
+    } catch (e) {
+      console.error('Reject error:', e);
+      alert('Failed to reject leave request');
     } finally {
       setProcessing(false);
     }
@@ -527,36 +510,22 @@ const TimeOff = ({ isAdmin = false, isHR = false }) => {
     try {
       setSubmitting(true);
 
-      try {
-        const response = await leaveAPI.apply({
-          leaveType: formData.type,
-          startDate: formData.startDate,
-          endDate: formData.endDate,
-        });
-        if (response.success) {
-          setShowNewRequest(false);
-          fetchLeaves();
-          return;
-        }
-      } catch (e) {
-        console.log('API error');
+      const response = await leaveAPI.apply({
+        leaveType: formData.type,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+      });
+      
+      if (response.success) {
+        setShowNewRequest(false);
+        fetchLeaves();
+        alert('Leave request submitted successfully!');
+      } else {
+        alert(response.message || 'Failed to submit leave request');
       }
-
-      // Add locally for demo
-      const newLeave = {
-        id: `leave-${Date.now()}`,
-        employeeName: employeeName,
-        startDate: formatDate(formData.startDate),
-        endDate: formatDate(formData.endDate),
-        type: formData.type,
-        status: 'pending',
-      };
-      setLeaveRequests(prev => [newLeave, ...prev]);
-      setShowNewRequest(false);
-
     } catch (err) {
       console.error('Error submitting:', err);
-      alert('Failed to submit leave request.');
+      alert(err.message || 'Failed to submit leave request.');
     } finally {
       setSubmitting(false);
     }

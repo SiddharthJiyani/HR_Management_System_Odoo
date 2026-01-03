@@ -10,15 +10,15 @@ const leaveSchema = new mongoose.Schema({
   // Leave Type
   leaveType: {
     type: String,
-    enum: ['vacation', 'sick', 'personal', 'unpaid', 'maternity', 'paternity', 'bereavement', 'other'],
+    enum: ['paid', 'vacation', 'annual', 'sick', 'personal', 'casual', 'unpaid', 'maternity', 'paternity', 'bereavement', 'other'],
     required: true
   },
   
   // Title/Reason
   title: {
     type: String,
-    required: [true, 'Leave title is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   reason: {
     type: String,
