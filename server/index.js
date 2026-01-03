@@ -14,7 +14,12 @@ app.use(express.json());
 
 // CORS configuration
 const corsOptions = {
-    origin: ["http://localhost:3000", "http://localhost:5173" , "http://localhost:5175","http://hr-management-system-odoo.vercel.app"], // Support both CRA and Vite
+    origin: [
+        "http://localhost:3000", 
+        "http://localhost:5173", 
+        "http://localhost:5175",
+        "https://hr-management-system-odoo.vercel.app"
+    ],
     credentials: true,
     optionsSuccessStatus: 200
 };
