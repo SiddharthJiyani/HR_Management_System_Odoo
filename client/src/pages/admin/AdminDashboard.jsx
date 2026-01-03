@@ -359,7 +359,7 @@ const AdminDashboard = () => {
       case 'attendance':
         return <Attendance isAdmin={true} />;
       case 'timeoff':
-        return <TimeOff />;
+        return <TimeOff isAdmin={true} />;
       default:
         return null;
     }

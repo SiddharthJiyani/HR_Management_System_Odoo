@@ -349,7 +349,7 @@ const HRDashboard = () => {
       case 'attendance':
         return <Attendance currentUser={currentUser || {}} />;
       case 'timeoff':
-        return <TimeOff />;
+        return <TimeOff isHR={true} />;
       default:
         return (
           <EmployeeDirectory 
