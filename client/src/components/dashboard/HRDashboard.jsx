@@ -14,7 +14,7 @@ import { employeeAPI, attendanceAPI } from '../../services/api';
 
 // Helper function to format employee data from API
 const formatEmployeeData = (employee) => {
-  const fullName = `${employee.firstName} ${employee.lastName}`.trim();
+  const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unknown';
   
   // Use currentAttendanceStatus from employee model (updated by check-in/out)
   const status = employee.currentAttendanceStatus || 'not-checked-in';
@@ -39,7 +39,7 @@ const formatEmployeeData = (employee) => {
     status: status,
     avatar: employee.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=FFD966&color=000&size=150`,
     attendance: employee.attendanceSummary || { present: 0, absent: 0, leave: 0, late: 0 },
-    // Keep original data for profile view
+    // Keep original data for profile view - includes private info
     originalData: employee,
   };
 };
@@ -184,8 +184,24 @@ const HRDashboard = () => {
     setShowMyProfile(false);
   }, []);
 
-  const handleEmployeeClick = useCallback((employee) => {
-    setSelectedEmployee(employee);
+  const handleEmployeeClick = useCallback(async (employee) => {
+    try {
+      // Fetch full employee data for detailed profile view
+      const response = await employeeAPI.getById(employee.id);
+      
+      if (response.success && response.data) {
+        // Format with full data from API
+        const fullData = formatEmployeeData(response.data);
+        setSelectedEmployee(fullData);
+      } else {
+        // Fallback to basic data if fetch fails
+        setSelectedEmployee(employee);
+      }
+    } catch (err) {
+      console.error('Error fetching employee details:', err);
+      // Fallback to basic data
+      setSelectedEmployee(employee);
+    }
     setShowMyProfile(false);
   }, []);
 

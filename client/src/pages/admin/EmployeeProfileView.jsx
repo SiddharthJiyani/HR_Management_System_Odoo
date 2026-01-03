@@ -159,6 +159,11 @@ const EmployeeProfileView = () => {
             data={employeeData.salaryData}
             onUpdate={handleSalaryUpdate}
             isAdmin={isAdminUser}
+            employeeId={employeeId}
+            onSaveSuccess={() => {
+              // Refresh employee data after save
+              window.location.reload();
+            }}
           />
         );
       default:

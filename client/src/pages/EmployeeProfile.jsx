@@ -34,6 +34,31 @@ const formatForProfileHeader = (employee) => {
   };
 };
 
+// Format employee data for PrivateInfoTab - includes all private details
+const formatForPrivateInfo = (employee) => {
+  if (!employee) return null;
+  
+  const original = employee.originalData || {};
+  
+  return {
+    dateOfBirth: original.dateOfBirth || '',
+    nationality: original.nationality || '',
+    personalEmail: original.personalEmail || employee.email || '',
+    gender: original.gender || '',
+    maritalStatus: original.maritalStatus || '',
+    residingAddress: original.residingAddress || original.address?.street || '',
+    bankDetails: original.bankDetails || {
+      bankName: '',
+      accountNumber: '',
+      ifscCode: '',
+      accountHolderName: '',
+      panNo: '',
+      uanNo: '',
+      empCode: employee.employeeId || ''
+    },
+  };
+};
+
 const EmployeeProfile = ({ employee, onBack }) => {
   const [activeTab, setActiveTab] = useState('resume');
 
@@ -52,6 +77,9 @@ const EmployeeProfile = ({ employee, onBack }) => {
 
   // Format employee data for ProfileHeader component
   const profileData = formatForProfileHeader(employee);
+  
+  // Format employee data for PrivateInfoTab - includes private details
+  const privateInfoData = formatForPrivateInfo(employee);
 
   // Tabs for HR view - NO Salary Info
   const tabs = [
@@ -66,7 +94,7 @@ const EmployeeProfile = ({ employee, onBack }) => {
       case 'privateInfo':
         return (
           <PrivateInfoTab 
-            data={profileData}
+            data={privateInfoData}
             onUpdate={() => {}} // HR cannot edit
             isEditable={false}
           />

@@ -328,6 +328,9 @@ exports.updateMyProfile = async (req, res) => {
     const userId = req.user.id;
     const updates = req.body;
 
+    console.log('Updating profile for user:', userId);
+    console.log('Update data received:', updates);
+
     const employee = await Employee.findOne({ user: userId });
 
     if (!employee) {
@@ -337,32 +340,45 @@ exports.updateMyProfile = async (req, res) => {
       });
     }
 
-    // Employees can update these fields (NOT salary)
+    // Employees can update these fields (NOT salary, NOT role/department changes)
     const allowedFields = [
-      'phone', 'address', 'emergencyContact', 'profilePhoto',
+      'firstName', 'lastName', 'phone', 'address', 'emergencyContact', 'profilePhoto',
       'about', 'skills', 'certifications', 'interests',
       'nationality', 'personalEmail', 'maritalStatus', 'residingAddress',
-      'bankDetails' // Employee can update their bank details
+      'dateOfBirth', 'gender', 'bankDetails' // Employee can update their personal & bank details
     ];
     
+    // Build update object with only allowed fields
+    const updateData = {};
     allowedFields.forEach(field => {
       if (updates[field] !== undefined) {
-        employee[field] = updates[field];
+        updateData[field] = updates[field];
       }
     });
 
-    await employee.save();
+    console.log('Filtered update data:', updateData);
+
+    // Use findByIdAndUpdate to avoid full validation
+    const updatedEmployee = await Employee.findByIdAndUpdate(
+      employee._id,
+      { $set: updateData },
+      { new: true, runValidators: false }
+    );
+
+    console.log('Profile updated successfully');
 
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
-      data: employee
+      data: updatedEmployee
     });
   } catch (error) {
-    console.error('Update my profile error:', error);
+    console.error('Update my profile error:', error.message);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Failed to update profile'
+      message: 'Failed to update profile',
+      error: error.message
     });
   }
 };

@@ -1,12 +1,57 @@
-import React, { useState, useEffect } from 'react';
-import { Tabs, Button } from '../components/ui';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Tabs, Button, Card } from '../components/ui';
 import { ProfileHeader, ResumeTab, PrivateInfoTab } from '../components/profile';
-import { SalaryInfoTab } from '../components/salary';
 import { employeeAPI } from '../services/api';
 import { useAuth } from '../context';
 
+// HR's own Salary View - Read Only, shows only totals
+const HRSalaryView = ({ salary }) => {
+  if (!salary) {
+    return (
+      <Card className="text-center py-12">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-neutral-100 flex items-center justify-center">
+          <svg className="w-8 h-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-medium text-neutral-700 mb-2">Salary Information</h3>
+        <p className="text-neutral-500">Salary details not available</p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <h3 className="font-semibold text-neutral-900 mb-5">My Salary Information</h3>
+      <div className="grid sm:grid-cols-3 gap-4">
+        <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-100">
+          <p className="text-xs text-neutral-500 mb-1">Monthly Salary (CTC)</p>
+          <p className="text-2xl font-bold text-green-600">
+            ₹{(salary.monthlyWage || 0).toLocaleString()}
+          </p>
+        </div>
+        <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100">
+          <p className="text-xs text-neutral-500 mb-1">Annual Salary</p>
+          <p className="text-2xl font-bold text-blue-600">
+            ₹{(salary.yearlyWage || 0).toLocaleString()}
+          </p>
+        </div>
+        <div className="p-4 bg-gradient-to-br from-primary-50 to-amber-50 rounded-xl border border-primary-100">
+          <p className="text-xs text-neutral-500 mb-1">Net Salary</p>
+          <p className="text-2xl font-bold text-primary-600">
+            ₹{(salary.netSalary || 0).toLocaleString()}
+          </p>
+        </div>
+      </div>
+      <p className="text-sm text-neutral-500 mt-4 text-center">
+        Contact Admin for detailed salary breakdown
+      </p>
+    </Card>
+  );
+};
+
 const MyProfile = () => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isHR } = useAuth();
   const [activeTab, setActiveTab] = useState('resume');
   const [loading, setLoading] = useState(true);
   const [employeeData, setEmployeeData] = useState(null);
@@ -14,11 +59,7 @@ const MyProfile = () => {
   const [error, setError] = useState(null);
 
   // Fetch employee profile data
-  useEffect(() => {
-    fetchProfileData();
-  }, []);
-
-  const fetchProfileData = async () => {
+  const fetchProfileData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -32,9 +73,13 @@ const MyProfile = () => {
       }
 
       // Fetch salary data
-      const salaryResponse = await employeeAPI.getMySalary();
-      if (salaryResponse.success) {
-        setSalaryData(salaryResponse.data);
+      try {
+        const salaryResponse = await employeeAPI.getMySalary();
+        if (salaryResponse.success) {
+          setSalaryData(salaryResponse.data?.salary || salaryResponse.data);
+        }
+      } catch (salaryErr) {
+        console.log('Salary fetch error (may not be set up):', salaryErr);
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -42,14 +87,17 @@ const MyProfile = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchProfileData();
+  }, [fetchProfileData]);
 
   const handleProfileUpdate = async (updatedData) => {
     try {
       const response = await employeeAPI.updateMyProfile(updatedData);
       if (response.success) {
         setEmployeeData(response.data);
-        // Show success message
         alert('Profile updated successfully!');
       } else {
         alert(response.message || 'Failed to update profile');
@@ -57,21 +105,6 @@ const MyProfile = () => {
     } catch (err) {
       console.error('Error updating profile:', err);
       alert('Failed to update profile');
-    }
-  };
-
-  const handleSalaryUpdate = async (updatedSalary) => {
-    try {
-      const response = await employeeAPI.updateSalary(employeeData._id, updatedSalary);
-      if (response.success) {
-        setSalaryData(response.data);
-        alert('Salary updated successfully!');
-      } else {
-        alert(response.message || 'Failed to update salary');
-      }
-    } catch (err) {
-      console.error('Error updating salary:', err);
-      alert('Failed to update salary');
     }
   };
 
@@ -142,12 +175,8 @@ const MyProfile = () => {
           />
         )}
 
-        {activeTab === 'salary' && salaryData && (
-          <SalaryInfoTab
-            data={salaryData}
-            onUpdate={handleSalaryUpdate}
-            isAdmin={isAdmin}
-          />
+        {activeTab === 'salary' && (
+          <HRSalaryView salary={salaryData} />
         )}
       </div>
     </div>

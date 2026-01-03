@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Input, Button, Badge } from '../ui';
+import { employeeAPI } from '../../services/api';
 
-const SalaryInfoTab = ({ data, onUpdate, isAdmin = false }) => {
+const SalaryInfoTab = ({ data, onUpdate, isAdmin = false, employeeId = null, onSaveSuccess }) => {
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   // Salary Configuration State
   const [salaryConfig, setSalaryConfig] = useState({
     monthlyWage: data?.monthlyWage || 50000,
@@ -394,14 +397,101 @@ const SalaryInfoTab = ({ data, onUpdate, isAdmin = false }) => {
         </Card>
       </div>
 
+      {/* Save Error */}
+      {saveError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+          {saveError}
+        </div>
+      )}
+
       {/* Save Button */}
       <div className="flex justify-end">
         <Button 
           variant="primary" 
-          onClick={() => onUpdate?.({ ...salaryConfig, calculatedValues })}
+          onClick={async () => {
+            if (!employeeId) {
+              onUpdate?.({ ...salaryConfig, calculatedValues });
+              return;
+            }
+            
+            setSaving(true);
+            setSaveError(null);
+            
+            try {
+              const salaryData = {
+                salary: {
+                  monthlyWage: salaryConfig.monthlyWage,
+                  yearlyWage: salaryConfig.yearlyWage,
+                  components: {
+                    basicSalary: { 
+                      percentage: salaryConfig.components.basicSalary.percentage,
+                      amount: calculatedValues.basicSalary 
+                    },
+                    houseRentAllowance: { 
+                      percentage: salaryConfig.components.houseRentAllowance.percentage,
+                      amount: calculatedValues.hra 
+                    },
+                    standardAllowance: { 
+                      percentage: salaryConfig.components.standardAllowance.percentage,
+                      amount: calculatedValues.standardAllowance 
+                    },
+                    performanceBonus: { 
+                      percentage: salaryConfig.components.performanceBonus.percentage,
+                      amount: calculatedValues.performanceBonus 
+                    },
+                    leaveTravelAllowance: { 
+                      percentage: salaryConfig.components.leaveTravelAllowance.percentage,
+                      amount: calculatedValues.lta 
+                    },
+                    fixedAllowance: { 
+                      percentage: parseFloat(((calculatedValues.fixedAllowance / salaryConfig.monthlyWage) * 100).toFixed(2)),
+                      amount: calculatedValues.fixedAllowance 
+                    },
+                  },
+                  deductions: {
+                    providentFund: {
+                      employee: { 
+                        percentage: salaryConfig.pfConfig.employeeContributionRate,
+                        amount: calculatedValues.employeePF 
+                      },
+                      employer: { 
+                        percentage: salaryConfig.pfConfig.employerContributionRate,
+                        amount: calculatedValues.employerPF 
+                      },
+                    },
+                    professionalTax: { 
+                      amount: salaryConfig.taxConfig.professionalTax 
+                    },
+                  },
+                  grossSalary: calculatedValues.grossSalary,
+                  totalDeductions: calculatedValues.totalDeductions,
+                  netSalary: calculatedValues.netSalary,
+                },
+                workingSchedule: {
+                  workingDaysPerWeek: salaryConfig.workingDaysPerWeek,
+                  breakTimeHours: salaryConfig.breakTimeHours,
+                },
+              };
+              
+              const response = await employeeAPI.updateSalary(employeeId, salaryData);
+              
+              if (response.success) {
+                alert('Salary saved successfully!');
+                onSaveSuccess?.();
+              } else {
+                setSaveError(response.message || 'Failed to save salary');
+              }
+            } catch (error) {
+              console.error('Save salary error:', error);
+              setSaveError(error.message || 'Failed to save salary');
+            } finally {
+              setSaving(false);
+            }
+          }}
           className="px-8"
+          disabled={saving || isOverBudget}
         >
-          Save Salary Configuration
+          {saving ? 'Saving...' : 'Save Salary Configuration'}
         </Button>
       </div>
     </div>
