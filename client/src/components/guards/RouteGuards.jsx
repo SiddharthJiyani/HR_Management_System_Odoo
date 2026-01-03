@@ -39,18 +39,24 @@ export const PublicRoute = ({ children }) => {
 
   if (isAuthenticated) {
     // Redirect based on user role
-    let redirectTo = '/coming-soon';
     
     // Admin users (including admin@gmail.com) go to admin dashboard
     if (isAdmin || user?.email === 'admin@gmail.com') {
-      // Always redirect admin to dashboard, ignore saved location
       return <Navigate to="/admin/dashboard" replace />;
-    } else if (user?.role === 'hr') {
-      redirectTo = '/dashboard';
     }
     
-    const from = location.state?.from?.pathname || redirectTo;
-    return <Navigate to={from} replace />;
+    // HR users go to HR dashboard
+    if (user?.role === 'hr') {
+      return <Navigate to="/dashboard" replace />;
+    }
+    
+    // Employee users go to employee dashboard
+    if (user?.role === 'employee') {
+      return <Navigate to="/employee/dashboard" replace />;
+    }
+    
+    // Default fallback
+    return <Navigate to="/employee/dashboard" replace />;
   }
 
   return children;

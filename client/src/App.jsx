@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import { PublicRoute, HRRoute, PrivateRoute, AdminRoute } from './components/guards/RouteGuards';
+import { PublicRoute, HRRoute, PrivateRoute, AdminRoute, EmployeeRoute } from './components/guards/RouteGuards';
 import SignIn from './components/auth/SignIn';
 import SignUp from './components/auth/SignUp';
 import { ComingSoon } from './pages';
 import { AdminDashboard, AdminProfile, EmployeeProfileView } from './pages/admin';
+import { EmployeeDashboard } from './pages/employee';
 import HRDashboard from './components/dashboard/HRDashboard';
 import './index.css';
 
@@ -56,7 +57,6 @@ function App() {
               </AdminRoute>
             }
           />
-          {/* Redirect /admin/profile to dashboard */}
           <Route
             path="/admin/profile"
             element={<Navigate to="/admin/dashboard" replace />}
@@ -72,7 +72,17 @@ function App() {
             }
           />
 
-          {/* Employee/Admin Coming Soon */}
+          {/* Employee Dashboard Route */}
+          <Route
+            path="/employee/dashboard"
+            element={
+              <EmployeeRoute>
+                <EmployeeDashboard />
+              </EmployeeRoute>
+            }
+          />
+
+          {/* Coming Soon */}
           <Route
             path="/coming-soon"
             element={
