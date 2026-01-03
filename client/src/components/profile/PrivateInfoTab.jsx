@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Button, TextArea, Badge } from '../ui';
+import { Card, Button } from '../ui';
 
 const EditIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -19,7 +19,7 @@ const CloseIcon = () => (
   </svg>
 );
 
-const EditableCard = ({ title, icon, content, onSave }) => {
+const EditableCard = ({ title, icon, content, onSave, isEditable = true }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(content);
 
@@ -35,21 +35,23 @@ const EditableCard = ({ title, icon, content, onSave }) => {
           {title}
           {icon && <span>{icon}</span>}
         </h3>
-        <button
-          onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-          className="p-1.5 rounded-lg text-neutral-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
-        >
-          {isEditing ? (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <EditIcon />
-          )}
-        </button>
+        {isEditable && (
+          <button
+            onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+            className="p-1.5 rounded-lg text-neutral-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+          >
+            {isEditing ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <EditIcon />
+            )}
+          </button>
+        )}
       </div>
       
-      {isEditing ? (
+      {isEditing && isEditable ? (
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -58,14 +60,14 @@ const EditableCard = ({ title, icon, content, onSave }) => {
         />
       ) : (
         <p className="text-sm text-neutral-600 leading-relaxed">
-          {text || 'Click edit to add content...'}
+          {text || (isEditable ? 'Click edit to add content...' : 'No information provided')}
         </p>
       )}
     </Card>
   );
 };
 
-const TagCard = ({ title, items = [], onAdd, onRemove, placeholder = 'Add new item' }) => {
+const TagCard = ({ title, items = [], onAdd, onRemove, placeholder = 'Add new item', isEditable = true }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newItem, setNewItem] = useState('');
 
@@ -89,12 +91,14 @@ const TagCard = ({ title, items = [], onAdd, onRemove, placeholder = 'Add new it
             className="inline-flex items-center gap-1 px-3 py-1.5 bg-primary-100/50 rounded-full group"
           >
             <span className="text-sm font-medium text-neutral-700">{item}</span>
-            <button
-              onClick={() => onRemove?.(index)}
-              className="w-4 h-4 rounded-full text-neutral-400 hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center"
-            >
-              <CloseIcon />
-            </button>
+            {isEditable && (
+              <button
+                onClick={() => onRemove?.(index)}
+                className="w-4 h-4 rounded-full text-neutral-400 hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center"
+              >
+                <CloseIcon />
+              </button>
+            )}
           </div>
         ))}
         
@@ -103,43 +107,47 @@ const TagCard = ({ title, items = [], onAdd, onRemove, placeholder = 'Add new it
         )}
       </div>
 
-      {/* Add New */}
-      {isAdding ? (
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder={placeholder}
-            className="flex-1 px-3 py-2 bg-white/80 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 transition-all"
-            autoFocus
-          />
-          <Button size="sm" onClick={handleAdd}>Add</Button>
-          <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)}>
-            Cancel
-          </Button>
-        </div>
-      ) : (
-        <button
-          onClick={() => setIsAdding(true)}
-          className="inline-flex items-center gap-2 text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors"
-        >
-          <PlusIcon />
-          + Add {title.replace('s', '')}
-        </button>
+      {/* Add New - Only show if editable */}
+      {isEditable && (
+        <>
+          {isAdding ? (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newItem}
+                onChange={(e) => setNewItem(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+                placeholder={placeholder}
+                className="flex-1 px-3 py-2 bg-white/80 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 transition-all"
+                autoFocus
+              />
+              <Button size="sm" onClick={handleAdd}>Add</Button>
+              <Button size="sm" variant="ghost" onClick={() => setIsAdding(false)}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsAdding(true)}
+              className="inline-flex items-center gap-2 text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors"
+            >
+              <PlusIcon />
+              + Add {title.replace('s', '')}
+            </button>
+          )}
+        </>
       )}
     </Card>
   );
 };
 
-const PrivateInfoTab = ({ data, onUpdate }) => {
+const PrivateInfoTab = ({ data, onUpdate, isEditable = true }) => {
   const [privateInfo, setPrivateInfo] = useState({
-    about: data?.about || 'Lorem ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry\'s standard dummy text ever since the 1500s.',
-    whatILove: data?.whatILove || 'Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry\'s standard dummy text ever since the 1500s.',
-    hobbies: data?.hobbies || 'Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry\'s standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.',
-    skills: data?.skills || ['React', 'TypeScript', 'Node.js', 'Python', 'SQL'],
-    certifications: data?.certifications || ['AWS Certified', 'Google Cloud Professional'],
+    about: data?.about || (isEditable ? 'Lorem ipsum is simply dummy text of the printing and typesetting industry.' : 'No information provided'),
+    whatILove: data?.whatILove || (isEditable ? 'Lorem Ipsum is simply dummy text of the printing and typesetting industry.' : 'No information provided'),
+    hobbies: data?.hobbies || (isEditable ? 'Lorem Ipsum is simply dummy text of the printing and typesetting industry.' : 'No information provided'),
+    skills: data?.skills || [],
+    certifications: data?.certifications || [],
   });
 
   const handleUpdateField = (field, value) => {
@@ -176,6 +184,7 @@ const PrivateInfoTab = ({ data, onUpdate }) => {
           icon="✏️"
           content={privateInfo.about}
           onSave={(text) => handleUpdateField('about', text)}
+          isEditable={isEditable}
         />
         
         <EditableCard 
@@ -183,6 +192,7 @@ const PrivateInfoTab = ({ data, onUpdate }) => {
           icon="✏️"
           content={privateInfo.whatILove}
           onSave={(text) => handleUpdateField('whatILove', text)}
+          isEditable={isEditable}
         />
         
         <EditableCard 
@@ -190,6 +200,7 @@ const PrivateInfoTab = ({ data, onUpdate }) => {
           icon="✏️"
           content={privateInfo.hobbies}
           onSave={(text) => handleUpdateField('hobbies', text)}
+          isEditable={isEditable}
         />
       </div>
 
@@ -201,6 +212,7 @@ const PrivateInfoTab = ({ data, onUpdate }) => {
           onAdd={handleAddSkill}
           onRemove={handleRemoveSkill}
           placeholder="Add a skill"
+          isEditable={isEditable}
         />
         
         <TagCard 
@@ -209,6 +221,7 @@ const PrivateInfoTab = ({ data, onUpdate }) => {
           onAdd={handleAddCertification}
           onRemove={handleRemoveCertification}
           placeholder="Add a certification"
+          isEditable={isEditable}
         />
       </div>
     </div>
@@ -216,4 +229,3 @@ const PrivateInfoTab = ({ data, onUpdate }) => {
 };
 
 export default PrivateInfoTab;
-

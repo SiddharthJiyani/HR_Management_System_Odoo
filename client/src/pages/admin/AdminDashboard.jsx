@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Avatar, StatusDot, Button, Badge, SearchBar } from '../../components/ui';
 import { Dropdown, DropdownItem } from '../../components/ui/Dropdown';
+import { employeeAPI } from '../../services/api';
+import Attendance from '../Attendance';
+import TimeOff from '../TimeOff';
 
 // Icons
 const PlusIcon = () => (
@@ -30,99 +33,44 @@ const SettingsIcon = () => (
   </svg>
 );
 
-// Mock employee data
-const mockEmployees = [
-  {
-    id: 1,
-    name: 'Sarah Johnson',
-    email: 'sarah.johnson@dayflow.com',
-    phone: '+1 (555) 123-4567',
-    role: 'Senior Software Engineer',
-    department: 'Engineering',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 2,
-    name: 'Michael Chen',
-    email: 'michael.chen@dayflow.com',
-    phone: '+1 (555) 234-5678',
-    role: 'Product Manager',
-    department: 'Product',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 3,
-    name: 'Emily Rodriguez',
-    email: 'emily.rodriguez@dayflow.com',
-    phone: '+1 (555) 345-6789',
-    role: 'UX Designer',
-    department: 'Design',
-    status: 'leave',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 4,
-    name: 'James Wilson',
-    email: 'james.wilson@dayflow.com',
-    phone: '+1 (555) 456-7890',
-    role: 'DevOps Engineer',
-    department: 'Engineering',
-    status: 'absent',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 5,
-    name: 'Priya Patel',
-    email: 'priya.patel@dayflow.com',
-    phone: '+1 (555) 567-8901',
-    role: 'Data Analyst',
-    department: 'Analytics',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 6,
-    name: 'David Kim',
-    email: 'david.kim@dayflow.com',
-    phone: '+1 (555) 678-9012',
-    role: 'Backend Developer',
-    department: 'Engineering',
-    status: 'not-checked-in',
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 7,
-    name: 'Lisa Thompson',
-    email: 'lisa.thompson@dayflow.com',
-    phone: '+1 (555) 789-0123',
-    role: 'HR Manager',
-    department: 'Human Resources',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 8,
-    name: 'Robert Martinez',
-    email: 'robert.martinez@dayflow.com',
-    phone: '+1 (555) 890-1234',
-    role: 'Cloud Architect',
-    department: 'Engineering',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-  },
-  {
-    id: 9,
-    name: 'Amanda Foster',
-    email: 'amanda.foster@dayflow.com',
-    phone: '+1 (555) 901-2345',
-    role: 'Finance Lead',
-    department: 'Finance',
-    status: 'present',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop&crop=face',
-  },
-];
+const RefreshIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+  </svg>
+);
+
+// Helper function to format employee data from API
+const formatEmployeeData = (employee) => {
+  const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unknown';
+  
+  // Determine status
+  let status = 'not-checked-in';
+  if (employee.status === 'leave' || employee.onLeave) status = 'leave';
+  else if (employee.status === 'absent') status = 'absent';
+  else if (employee.status === 'present' || employee.isCheckedIn) status = 'present';
+
+  return {
+    id: employee._id,
+    name: fullName,
+    email: employee.email,
+    phone: employee.phone || 'Not provided',
+    role: employee.designation || employee.role || 'Employee',
+    department: employee.department || 'Other',
+    status: status,
+    avatar: employee.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=FFD966&color=000&size=150`,
+    employeeId: employee.employeeId,
+    loginId: employee.employeeId,
+    company: 'Dayflow Inc.',
+    manager: employee.manager || 'Not assigned',
+    location: employee.address?.city || 'Not specified',
+    joinDate: employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    }) : 'Not set',
+    originalData: employee,
+  };
+};
 
 // Employee Card Component
 const EmployeeCard = ({ employee, onClick }) => {
@@ -133,14 +81,11 @@ const EmployeeCard = ({ employee, onClick }) => {
       className="relative overflow-hidden group animate-fade-in cursor-pointer"
       padding="none"
     >
-      {/* Status Indicator */}
       <div className="absolute top-4 right-4 z-10">
         <StatusDot status={employee.status} size="md" />
       </div>
 
-      {/* Card Content */}
       <div className="p-6">
-        {/* Avatar */}
         <div className="flex justify-center mb-4">
           <Avatar 
             src={employee.avatar}
@@ -150,7 +95,6 @@ const EmployeeCard = ({ employee, onClick }) => {
           />
         </div>
 
-        {/* Info */}
         <div className="text-center space-y-1">
           <h3 className="font-semibold text-neutral-900 text-lg group-hover:text-primary-600 transition-colors">
             {employee.name}
@@ -163,7 +107,6 @@ const EmployeeCard = ({ employee, onClick }) => {
           )}
         </div>
 
-        {/* Hover Info */}
         <div className="mt-4 pt-4 border-t border-neutral-100 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <p className="text-xs text-neutral-400 text-center truncate">
             {employee.email}
@@ -171,7 +114,6 @@ const EmployeeCard = ({ employee, onClick }) => {
         </div>
       </div>
 
-      {/* Gradient Overlay on Hover */}
       <div className="absolute inset-0 bg-gradient-to-t from-primary-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
     </Card>
   );
@@ -195,27 +137,176 @@ const StatCard = ({ label, value, color }) => {
   );
 };
 
+// Loading Skeleton
+const EmployeeCardSkeleton = () => (
+  <Card className="animate-pulse" padding="none">
+    <div className="p-6">
+      <div className="flex justify-center mb-4">
+        <div className="w-20 h-20 bg-neutral-200 rounded-full" />
+      </div>
+      <div className="text-center space-y-2">
+        <div className="h-5 bg-neutral-200 rounded w-3/4 mx-auto" />
+        <div className="h-4 bg-neutral-200 rounded w-1/2 mx-auto" />
+        <div className="h-6 bg-neutral-200 rounded w-1/3 mx-auto" />
+      </div>
+    </div>
+  </Card>
+);
+
+// Employee Directory Content
+const EmployeeDirectoryContent = ({ 
+  employees, 
+  loading, 
+  error, 
+  searchValue, 
+  onRefresh, 
+  onEmployeeClick 
+}) => {
+  const filteredEmployees = employees.filter(emp => 
+    emp.name.toLowerCase().includes(searchValue.toLowerCase()) ||
+    emp.role.toLowerCase().includes(searchValue.toLowerCase()) ||
+    emp.department?.toLowerCase().includes(searchValue.toLowerCase()) ||
+    emp.email?.toLowerCase().includes(searchValue.toLowerCase())
+  );
+
+  const stats = {
+    total: employees.length,
+    present: employees.filter(e => e.status === 'present').length,
+    absent: employees.filter(e => e.status === 'absent').length,
+    leave: employees.filter(e => e.status === 'leave').length,
+  };
+
+  return (
+    <>
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900">Employee Directory</h1>
+          <p className="text-neutral-500 mt-1">Manage and view your team members</p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            icon={<RefreshIcon />}
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+          <Button 
+            variant="primary"
+            icon={<PlusIcon />}
+            onClick={() => alert('Add employee form coming soon!')}
+          >
+            New Employee
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Total Employees" value={stats.total} color="neutral" />
+        <StatCard label="Present Today" value={stats.present} color="success" />
+        <StatCard label="Absent" value={stats.absent} color="warning" />
+        <StatCard label="On Leave" value={stats.leave} color="info" />
+      </div>
+
+      {/* Error State */}
+      {error && (
+        <Card className="text-center py-8 mb-6 border-error/20 bg-error/5">
+          <div className="text-error mb-2">
+            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-neutral-700">{error}</h3>
+          <Button variant="outline" className="mt-4" onClick={onRefresh}>
+            Try Again
+          </Button>
+        </Card>
+      )}
+
+      {/* Loading State */}
+      {loading && !error && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <EmployeeCardSkeleton key={i} />
+          ))}
+        </div>
+      )}
+
+      {/* Employee Grid */}
+      {!loading && !error && filteredEmployees.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredEmployees.map((employee) => (
+            <EmployeeCard 
+              key={employee.id}
+              employee={employee}
+              onClick={() => onEmployeeClick(employee)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && filteredEmployees.length === 0 && (
+        <Card className="text-center py-12">
+          <div className="text-neutral-400 mb-2">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-neutral-700">
+            {searchValue ? 'No employees found' : 'No employees yet'}
+          </h3>
+          <p className="text-neutral-500 mt-1">
+            {searchValue ? 'Try adjusting your search' : 'Add your first employee to get started'}
+          </p>
+        </Card>
+      )}
+    </>
+  );
+};
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [searchValue, setSearchValue] = useState('');
   const [currentPage, setCurrentPage] = useState('employees');
   const [isCheckedIn, setIsCheckedIn] = useState(false);
+  const [checkInTime, setCheckInTime] = useState(null);
 
-  // Filter employees based on search
-  const filteredEmployees = mockEmployees.filter(emp => 
-    emp.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-    emp.role.toLowerCase().includes(searchValue.toLowerCase()) ||
-    emp.department?.toLowerCase().includes(searchValue.toLowerCase())
-  );
+  // API data states
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Stats
-  const stats = {
-    total: mockEmployees.length,
-    present: mockEmployees.filter(e => e.status === 'present').length,
-    absent: mockEmployees.filter(e => e.status === 'absent').length,
-    leave: mockEmployees.filter(e => e.status === 'leave').length,
-  };
+  // Fetch employees from API
+  const fetchEmployees = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await employeeAPI.getAll();
+      
+      if (response.success && response.data) {
+        const formattedEmployees = response.data.map(emp => formatEmployeeData(emp));
+        setEmployees(formattedEmployees);
+      } else {
+        setEmployees([]);
+      }
+    } catch (err) {
+      console.error('Error fetching employees:', err);
+      setError('Failed to load employees. Please try again.');
+      setEmployees([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch on mount
+  useEffect(() => {
+    fetchEmployees();
+  }, [fetchEmployees]);
 
   const handleEmployeeClick = (employee) => {
     navigate(`/admin/employee/${employee.id}`);
@@ -232,13 +323,47 @@ const AdminDashboard = () => {
 
   const handleCheckIn = () => {
     setIsCheckedIn(true);
+    setCheckInTime(new Date());
   };
 
   const handleCheckOut = () => {
     setIsCheckedIn(false);
+    setCheckInTime(null);
   };
 
   const userStatus = isCheckedIn ? 'present' : 'not-checked-in';
+
+  const formatTime = (date) => {
+    if (!date) return '';
+    return new Date(date).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  // Render main content based on current page
+  const renderContent = () => {
+    switch (currentPage) {
+      case 'employees':
+        return (
+          <EmployeeDirectoryContent 
+            employees={employees}
+            loading={loading}
+            error={error}
+            searchValue={searchValue}
+            onRefresh={fetchEmployees}
+            onEmployeeClick={handleEmployeeClick}
+          />
+        );
+      case 'attendance':
+        return <Attendance isAdmin={true} />;
+      case 'timeoff':
+        return <TimeOff />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-bg-start to-bg-end">
@@ -254,6 +379,7 @@ const AdminDashboard = () => {
                 </svg>
               </div>
               <span className="font-bold text-lg text-neutral-900 tracking-tight">Dayflow</span>
+              <Badge variant="primary" size="sm">Admin</Badge>
             </div>
 
             {/* Center Nav Tabs */}
@@ -281,13 +407,15 @@ const AdminDashboard = () => {
 
             {/* Right Section */}
             <div className="flex items-center gap-3">
-              {/* Search */}
-              <SearchBar 
-                value={searchValue}
-                onChange={setSearchValue}
-                className="hidden lg:block w-56"
-                placeholder="Search employees..."
-              />
+              {/* Search - only show on employees page */}
+              {currentPage === 'employees' && (
+                <SearchBar 
+                  value={searchValue}
+                  onChange={setSearchValue}
+                  className="hidden lg:block w-56"
+                  placeholder="Search employees..."
+                />
+              )}
 
               {/* Settings */}
               <button className="p-2 rounded-xl text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-all">
@@ -336,76 +464,32 @@ const AdminDashboard = () => {
         <div className="flex gap-8">
           {/* Main Content Area */}
           <main className="flex-1">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <div>
-                <h1 className="text-2xl font-bold text-neutral-900">Employee Directory</h1>
-                <p className="text-neutral-500 mt-1">Manage and view your team members</p>
+            {/* Mobile Search - only on employees page */}
+            {currentPage === 'employees' && (
+              <div className="lg:hidden mb-6">
+                <SearchBar 
+                  value={searchValue}
+                  onChange={setSearchValue}
+                  placeholder="Search employees..."
+                />
               </div>
-              <Button 
-                variant="primary"
-                icon={<PlusIcon />}
-                onClick={() => alert('Add employee form coming soon!')}
-              >
-                New Employee
-              </Button>
-            </div>
-
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <StatCard label="Total Employees" value={stats.total} color="neutral" />
-              <StatCard label="Present Today" value={stats.present} color="success" />
-              <StatCard label="Absent" value={stats.absent} color="warning" />
-              <StatCard label="On Leave" value={stats.leave} color="info" />
-            </div>
-
-            {/* Mobile Search */}
-            <div className="lg:hidden mb-6">
-              <SearchBar 
-                value={searchValue}
-                onChange={setSearchValue}
-                placeholder="Search employees..."
-              />
-            </div>
-
-            {/* Employee Grid */}
-            {filteredEmployees.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredEmployees.map((employee, index) => (
-                  <div 
-                    key={employee.id} 
-                    className={`stagger-${Math.min(index + 1, 9)}`}
-                    style={{ animationFillMode: 'both' }}
-                  >
-                    <EmployeeCard 
-                      employee={employee}
-                      onClick={() => handleEmployeeClick(employee)}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Card className="text-center py-12">
-                <div className="text-neutral-400 mb-2">
-                  <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-medium text-neutral-700">No employees found</h3>
-                <p className="text-neutral-500 mt-1">Try adjusting your search</p>
-              </Card>
             )}
+
+            {renderContent()}
           </main>
 
           {/* Right Sidebar - Check In/Out */}
           <aside className="hidden xl:block w-72 flex-shrink-0">
             <Card className="sticky top-24">
-              <h3 className="font-semibold text-neutral-900 mb-4 flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Attendance
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-neutral-900 flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Attendance
+                </h3>
+                <StatusDot status={userStatus} size="md" />
+              </div>
               
               {isCheckedIn ? (
                 <div className="space-y-4">
@@ -416,7 +500,7 @@ const AdminDashboard = () => {
                       </svg>
                       <span className="font-medium text-sm">Checked In</span>
                     </div>
-                    <p className="text-sm text-neutral-600">Since {new Date().toLocaleTimeString()}</p>
+                    <p className="text-sm text-neutral-600">Since {formatTime(checkInTime)}</p>
                   </div>
                   <Button variant="secondary" className="w-full" onClick={handleCheckOut}>
                     Check Out →
@@ -452,6 +536,10 @@ const AdminDashboard = () => {
                   <span className="text-sm text-neutral-500">Days Present</span>
                   <span className="font-semibold text-neutral-900">4 / 5</span>
                 </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-neutral-500">Avg. Check-in</span>
+                  <span className="font-semibold text-neutral-900">9:05 AM</span>
+                </div>
               </div>
             </Card>
           </aside>
@@ -462,4 +550,3 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
-

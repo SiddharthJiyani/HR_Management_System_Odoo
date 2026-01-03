@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Tabs, Button, Avatar, Badge } from '../../components/ui';
 import { ProfileHeader, PrivateInfoTab, ResumeTab } from '../../components/profile';
 import { SalaryInfoTab } from '../../components/salary';
+import { employeeAPI } from '../../services/api';
 
 const BackIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -17,209 +18,100 @@ const LogoutIcon = () => (
   </svg>
 );
 
-// Mock employee data - in real app, fetch from API
-const employeesData = {
-  1: {
-    id: 1,
-    name: 'Sarah Johnson',
-    email: 'sarah.johnson@dayflow.com',
-    phone: '+1 (555) 123-4567',
-    loginId: 'EMP001',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+// Format employee data from API
+const formatEmployeeData = (employee) => {
+  if (!employee) return null;
+  
+  const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unknown';
+  
+  return {
+    id: employee._id,
+    name: fullName,
+    email: employee.email || 'N/A',
+    phone: employee.phone || 'N/A',
+    loginId: employee.employeeId || `EMP${employee._id?.slice(-4)}`,
+    avatar: employee.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=FFD966&color=000&size=150`,
     company: 'Dayflow Inc.',
-    department: 'Engineering',
-    manager: 'John Smith',
-    location: 'San Francisco, CA',
-    role: 'Senior Software Engineer',
-    about: 'Passionate software engineer with 8+ years of experience building scalable web applications.',
-    whatILove: 'I love solving complex problems and mentoring junior developers.',
-    hobbies: 'Hiking, photography, and open-source contributions.',
-    skills: ['React', 'TypeScript', 'Node.js', 'Python', 'AWS'],
-    certifications: ['AWS Solutions Architect', 'Google Cloud Professional'],
-    salaryData: { monthlyWage: 85000, yearlyWage: 1020000 },
-  },
-  2: {
-    id: 2,
-    name: 'Michael Chen',
-    email: 'michael.chen@dayflow.com',
-    phone: '+1 (555) 234-5678',
-    loginId: 'EMP002',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
-    company: 'Dayflow Inc.',
-    department: 'Product',
-    manager: 'Jane Doe',
-    location: 'New York, NY',
-    role: 'Product Manager',
-    about: 'Product leader with a track record of launching successful products.',
-    whatILove: 'Building products that make a difference in people\'s lives.',
-    hobbies: 'Reading, chess, and cooking.',
-    skills: ['Product Strategy', 'Agile', 'Data Analysis', 'UX Research'],
-    certifications: ['Certified Scrum Product Owner', 'PMP'],
-    salaryData: { monthlyWage: 95000, yearlyWage: 1140000 },
-  },
-  3: {
-    id: 3,
-    name: 'Emily Rodriguez',
-    email: 'emily.rodriguez@dayflow.com',
-    phone: '+1 (555) 345-6789',
-    loginId: 'EMP003',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
-    company: 'Dayflow Inc.',
-    department: 'Design',
-    manager: 'Sarah Wilson',
-    location: 'Austin, TX',
-    role: 'UX Designer',
-    about: 'User-centered designer passionate about creating intuitive experiences.',
-    whatILove: 'Turning complex problems into simple, elegant solutions.',
-    hobbies: 'Art, yoga, and traveling.',
-    skills: ['Figma', 'User Research', 'Prototyping', 'Design Systems'],
-    certifications: ['Google UX Design Certificate'],
-    salaryData: { monthlyWage: 72000, yearlyWage: 864000 },
-  },
-  4: {
-    id: 4,
-    name: 'James Wilson',
-    email: 'james.wilson@dayflow.com',
-    phone: '+1 (555) 456-7890',
-    loginId: 'EMP004',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
-    company: 'Dayflow Inc.',
-    department: 'Engineering',
-    manager: 'John Smith',
-    location: 'Seattle, WA',
-    role: 'DevOps Engineer',
-    about: 'Infrastructure specialist focused on automation and reliability.',
-    whatILove: 'Building resilient systems that scale.',
-    hobbies: 'Gaming, home automation, and music.',
-    skills: ['Kubernetes', 'Docker', 'Terraform', 'CI/CD', 'Python'],
-    certifications: ['CKA', 'AWS DevOps Professional'],
-    salaryData: { monthlyWage: 78000, yearlyWage: 936000 },
-  },
-  5: {
-    id: 5,
-    name: 'Priya Patel',
-    email: 'priya.patel@dayflow.com',
-    phone: '+1 (555) 567-8901',
-    loginId: 'EMP005',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop&crop=face',
-    company: 'Dayflow Inc.',
-    department: 'Analytics',
-    manager: 'Mike Johnson',
-    location: 'Chicago, IL',
-    role: 'Data Analyst',
-    about: 'Data-driven analyst with expertise in business intelligence.',
-    whatILove: 'Uncovering insights that drive business decisions.',
-    hobbies: 'Reading, podcasts, and running.',
-    skills: ['SQL', 'Python', 'Tableau', 'Excel', 'Statistics'],
-    certifications: ['Google Data Analytics Certificate'],
-    salaryData: { monthlyWage: 65000, yearlyWage: 780000 },
-  },
-  6: {
-    id: 6,
-    name: 'David Kim',
-    email: 'david.kim@dayflow.com',
-    phone: '+1 (555) 678-9012',
-    loginId: 'EMP006',
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop&crop=face',
-    company: 'Dayflow Inc.',
-    department: 'Engineering',
-    manager: 'John Smith',
-    location: 'Los Angeles, CA',
-    role: 'Backend Developer',
-    about: 'Backend engineer specializing in API design and microservices.',
-    whatILove: 'Writing clean, efficient code that powers great products.',
-    hobbies: 'Basketball, video games, and cooking.',
-    skills: ['Java', 'Spring Boot', 'PostgreSQL', 'Redis', 'Kafka'],
-    certifications: ['Oracle Certified Professional'],
-    salaryData: { monthlyWage: 75000, yearlyWage: 900000 },
-  },
-  7: {
-    id: 7,
-    name: 'Lisa Thompson',
-    email: 'lisa.thompson@dayflow.com',
-    phone: '+1 (555) 789-0123',
-    loginId: 'EMP007',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face',
-    company: 'Dayflow Inc.',
-    department: 'Human Resources',
-    manager: 'CEO',
-    location: 'San Francisco, CA',
-    role: 'HR Manager',
-    about: 'HR leader focused on building great company culture.',
-    whatILove: 'Helping people grow and succeed in their careers.',
-    hobbies: 'Reading, yoga, and volunteering.',
-    skills: ['Recruitment', 'Employee Relations', 'HRIS', 'Compliance'],
-    certifications: ['SHRM-CP', 'PHR'],
-    salaryData: { monthlyWage: 82000, yearlyWage: 984000 },
-  },
-  8: {
-    id: 8,
-    name: 'Robert Martinez',
-    email: 'robert.martinez@dayflow.com',
-    phone: '+1 (555) 890-1234',
-    loginId: 'EMP008',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-    company: 'Dayflow Inc.',
-    department: 'Engineering',
-    manager: 'John Smith',
-    location: 'Denver, CO',
-    role: 'Cloud Architect',
-    about: 'Cloud architect designing scalable, secure infrastructure.',
-    whatILove: 'Building the foundation that enables innovation.',
-    hobbies: 'Hiking, photography, and flying drones.',
-    skills: ['AWS', 'Azure', 'GCP', 'Architecture', 'Security'],
-    certifications: ['AWS Solutions Architect Pro', 'Azure Solutions Architect'],
-    salaryData: { monthlyWage: 110000, yearlyWage: 1320000 },
-  },
-  9: {
-    id: 9,
-    name: 'Amanda Foster',
-    email: 'amanda.foster@dayflow.com',
-    phone: '+1 (555) 901-2345',
-    loginId: 'EMP009',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop&crop=face',
-    company: 'Dayflow Inc.',
-    department: 'Finance',
-    manager: 'CFO',
-    location: 'Boston, MA',
-    role: 'Finance Lead',
-    about: 'Finance professional with expertise in FP&A and strategic planning.',
-    whatILove: 'Helping the company make smart financial decisions.',
-    hobbies: 'Tennis, reading, and travel.',
-    skills: ['Financial Modeling', 'Budgeting', 'Excel', 'SAP'],
-    certifications: ['CPA', 'CFA Level II'],
-    salaryData: { monthlyWage: 92000, yearlyWage: 1104000 },
-  },
+    department: employee.department || 'General',
+    manager: employee.manager || 'Not assigned',
+    location: employee.address?.city ? `${employee.address.city}, ${employee.address.state || ''}`.trim() : 'Not specified',
+    role: employee.designation || employee.role || 'Employee',
+    about: employee.about || '',
+    whatILove: employee.whatILove || '',
+    hobbies: employee.hobbies || '',
+    skills: employee.skills || [],
+    certifications: employee.certifications || [],
+    salaryData: employee.salary || { monthlyWage: 0, yearlyWage: 0 },
+    originalData: employee,
+  };
 };
+
+// Loading skeleton
+const ProfileSkeleton = () => (
+  <div className="animate-pulse">
+    <Card className="p-6">
+      <div className="flex gap-6">
+        <div className="w-24 h-24 bg-neutral-200 rounded-full" />
+        <div className="flex-1 space-y-3">
+          <div className="h-6 bg-neutral-200 rounded w-1/3" />
+          <div className="h-4 bg-neutral-200 rounded w-1/4" />
+          <div className="h-4 bg-neutral-200 rounded w-1/2" />
+        </div>
+      </div>
+    </Card>
+    <div className="mt-8">
+      <div className="h-10 bg-neutral-200 rounded w-1/3 mb-6" />
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div className="h-4 bg-neutral-200 rounded w-full" />
+          <div className="h-4 bg-neutral-200 rounded w-3/4" />
+          <div className="h-4 bg-neutral-200 rounded w-1/2" />
+        </div>
+      </Card>
+    </div>
+  </div>
+);
 
 const EmployeeProfileView = () => {
   const { employeeId } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('resume');
+  
+  // API data states
+  const [employeeData, setEmployeeData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Check if current user is admin
   const isAdminUser = isAdmin || user?.email === 'admin@gmail.com';
 
-  // Get employee data
-  const employeeData = employeesData[employeeId] || {
-    id: employeeId,
-    name: 'Unknown Employee',
-    email: 'unknown@dayflow.com',
-    phone: 'N/A',
-    loginId: `EMP${employeeId}`,
-    company: 'Dayflow Inc.',
-    department: 'Unknown',
-    manager: 'N/A',
-    location: 'N/A',
-    role: 'Employee',
-    about: '',
-    whatILove: '',
-    hobbies: '',
-    skills: [],
-    certifications: [],
-    salaryData: { monthlyWage: 50000, yearlyWage: 600000 },
-  };
+  // Fetch employee data from API
+  useEffect(() => {
+    const fetchEmployee = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await employeeAPI.getById(employeeId);
+        
+        if (response.success && response.data) {
+          setEmployeeData(formatEmployeeData(response.data));
+        } else {
+          setError('Employee not found');
+        }
+      } catch (err) {
+        console.error('Error fetching employee:', err);
+        setError('Failed to load employee data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (employeeId) {
+      fetchEmployee();
+    }
+  }, [employeeId]);
 
   // Tab configuration - Salary Info only visible to admin
   const tabs = [
@@ -228,16 +120,19 @@ const EmployeeProfileView = () => {
     ...(isAdminUser ? [{ id: 'salaryInfo', label: 'Salary Info' }] : []),
   ];
 
-  const handleProfileUpdate = (data) => {
+  const handleProfileUpdate = async (data) => {
     console.log('Profile updated:', data);
+    // TODO: Call API to update employee profile
   };
 
-  const handlePrivateInfoUpdate = (data) => {
+  const handlePrivateInfoUpdate = async (data) => {
     console.log('Private info updated:', data);
+    // TODO: Call API to update private info
   };
 
-  const handleSalaryUpdate = (data) => {
+  const handleSalaryUpdate = async (data) => {
     console.log('Salary updated:', data);
+    // TODO: Call API to update salary info
   };
 
   const handleLogout = () => {
@@ -246,6 +141,8 @@ const EmployeeProfileView = () => {
   };
 
   const renderTabContent = () => {
+    if (!employeeData) return null;
+    
     switch (activeTab) {
       case 'resume':
         return <ResumeTab />;
@@ -344,33 +241,56 @@ const EmployeeProfileView = () => {
           </div>
         </div>
 
-        {/* Profile Header */}
-        <div className="animate-fade-in">
-          <ProfileHeader 
-            employee={employeeData}
-            onUpdate={handleProfileUpdate}
-            isEditable={isAdminUser}
-            isAdmin={false}
-          />
-        </div>
+        {/* Loading State */}
+        {loading && <ProfileSkeleton />}
 
-        {/* Tabs Section */}
-        <div className="mt-8 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-          <Tabs 
-            tabs={tabs}
-            activeTab={activeTab}
-            onChange={setActiveTab}
-            className="mb-6"
-          />
+        {/* Error State */}
+        {error && !loading && (
+          <Card className="text-center py-12">
+            <div className="text-error mb-4">
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-neutral-700">{error}</h3>
+            <p className="text-neutral-500 mt-1">Please try again or go back to the employee directory</p>
+            <Button variant="primary" className="mt-4" onClick={() => navigate('/admin/dashboard')}>
+              Back to Employees
+            </Button>
+          </Card>
+        )}
 
-          <div className="animate-fade-in" key={activeTab}>
-            {renderTabContent()}
-          </div>
-        </div>
+        {/* Profile Content */}
+        {!loading && !error && employeeData && (
+          <>
+            {/* Profile Header */}
+            <div className="animate-fade-in">
+              <ProfileHeader 
+                employee={employeeData}
+                onUpdate={handleProfileUpdate}
+                isEditable={isAdminUser}
+                isAdmin={false}
+              />
+            </div>
+
+            {/* Tabs Section */}
+            <div className="mt-8 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+              <Tabs 
+                tabs={tabs}
+                activeTab={activeTab}
+                onChange={setActiveTab}
+                className="mb-6"
+              />
+
+              <div className="animate-fade-in" key={activeTab}>
+                {renderTabContent()}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 };
 
 export default EmployeeProfileView;
-
