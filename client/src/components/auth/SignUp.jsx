@@ -1,8 +1,13 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthLayout, InputField, Button, SelectField } from './AuthComponents';
+import { useAuth } from '../../context/AuthContext';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 
-const SignUp = ({ onSignIn, onSignUp }) => {
+const SignUp = () => {
+  const navigate = useNavigate();
+  const { signup } = useAuth();
+  
   const [formData, setFormData] = useState({
     employeeId: '',
     email: '',
@@ -12,6 +17,7 @@ const SignUp = ({ onSignIn, onSignUp }) => {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const roleOptions = [
     { value: 'employee', label: 'Employee' },
@@ -69,7 +75,17 @@ const SignUp = ({ onSignIn, onSignUp }) => {
     
     setLoading(true);
     try {
-      await onSignUp?.(formData);
+      const result = await signup(formData);
+      
+      if (result.success) {
+        setSuccess(true);
+        // Redirect to sign in after 2 seconds
+        setTimeout(() => {
+          navigate('/signin');
+        }, 2000);
+      } else {
+        setErrors({ general: result.message || 'Failed to create account' });
+      }
     } catch (error) {
       setErrors({ general: error.message || 'Failed to create account' });
     } finally {
@@ -210,11 +226,20 @@ const SignUp = ({ onSignIn, onSignUp }) => {
           </p>
         </div>
 
+        {/* Success Message */}
+        {success && (
+          <div className="p-4 rounded-xl bg-green-50 border border-green-200">
+            <p className="text-sm text-green-700">
+              ✅ Account created successfully! Redirecting to sign in...
+            </p>
+          </div>
+        )}
+
         <Button
           type="submit"
           loading={loading}
           className="w-full"
-          disabled={!isFormValid}
+          disabled={!isFormValid || success}
         >
           Create Account
         </Button>
@@ -224,7 +249,7 @@ const SignUp = ({ onSignIn, onSignUp }) => {
             Already have an account?{' '}
             <button
               type="button"
-              onClick={onSignIn}
+              onClick={() => navigate('/signin')}
               className="text-primary-500 hover:text-primary-600 font-medium transition-colors"
             >
               Sign In

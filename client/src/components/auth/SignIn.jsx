@@ -1,7 +1,12 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AuthLayout, InputField, Button } from './AuthComponents';
+import { useAuth } from '../../context/AuthContext';
 
-const SignIn = ({ onSignUp, onForgotPassword, onSignIn }) => {
+const SignIn = () => {
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -33,8 +38,18 @@ const SignIn = ({ onSignUp, onForgotPassword, onSignIn }) => {
     
     setLoading(true);
     try {
-      // Call the sign in API
-      await onSignIn?.(formData);
+      const result = await login(formData);
+      
+      if (result.success) {
+        // Redirect based on role
+        if (result.user?.role === 'hr') {
+          navigate('/dashboard');
+        } else {
+          navigate('/coming-soon');
+        }
+      } else {
+        setErrors({ general: result.message || 'Failed to sign in' });
+      }
     } catch (error) {
       setErrors({ general: error.message || 'Failed to sign in' });
     } finally {
@@ -93,7 +108,7 @@ const SignIn = ({ onSignUp, onForgotPassword, onSignIn }) => {
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={onForgotPassword}
+              onClick={() => navigate('/forgot-password')}
               className="text-sm text-primary-500 hover:text-primary-600 transition-colors"
             >
               Forgot password?
@@ -115,7 +130,7 @@ const SignIn = ({ onSignUp, onForgotPassword, onSignIn }) => {
             Don't have an account?{' '}
             <button
               type="button"
-              onClick={onSignUp}
+              onClick={() => navigate('/signup')}
               className="text-primary-500 hover:text-primary-600 font-medium transition-colors"
             >
               Sign Up
