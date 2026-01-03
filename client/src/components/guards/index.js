@@ -1,1 +1,1 @@
-export { PrivateRoute, PublicRoute, HRRoute, EmployeeRoute } from './RouteGuards';
+export { PrivateRoute, PublicRoute, HRRoute, EmployeeRoute, AdminRoute } from './RouteGuards';

@@ -30,7 +30,7 @@ export const PrivateRoute = ({ children }) => {
 
 // Public route - accessible only when NOT authenticated
 export const PublicRoute = ({ children }) => {
-  const { isAuthenticated, loading, user } = useAuth();
+  const { isAuthenticated, loading, user, isAdmin } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -39,7 +39,15 @@ export const PublicRoute = ({ children }) => {
 
   if (isAuthenticated) {
     // Redirect based on user role
-    const redirectTo = user?.role === 'hr' ? '/dashboard' : '/coming-soon';
+    let redirectTo = '/coming-soon';
+    
+    // Admin users (including admin@gmail.com) go to admin dashboard
+    if (isAdmin || user?.email === 'admin@gmail.com') {
+      redirectTo = '/admin/dashboard';
+    } else if (user?.role === 'hr') {
+      redirectTo = '/dashboard';
+    }
+    
     const from = location.state?.from?.pathname || redirectTo;
     return <Navigate to={from} replace />;
   }
@@ -81,6 +89,29 @@ export const EmployeeRoute = ({ children }) => {
   }
 
   if (!isEmployee) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
+// Admin only route
+export const AdminRoute = ({ children }) => {
+  const { isAuthenticated, loading, isAdmin, user } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/signin" state={{ from: location }} replace />;
+  }
+
+  // Check if user is admin (email: admin@gmail.com or role: admin)
+  const isAdminUser = isAdmin || user?.email === 'admin@gmail.com';
+  
+  if (!isAdminUser) {
     return <Navigate to="/dashboard" replace />;
   }
 
