@@ -10,20 +10,12 @@ const forgotPasswordTemplate = require("../mail/templates/forgotPasswordTemplate
 exports.signup = async (req, res) => {
   try {
     // Destructure fields from the request body
-    const { email, password, confirmPassword, accountType, otp } = req.body;
+    const { employeeId, email, password, confirmPassword, role } = req.body;
     // Check if All Details are there or not
-    if (!email || !password || !confirmPassword || !accountType || !otp) {
+    if (!employeeId || !email || !password || !confirmPassword || !role) {
       return res.status(403).send({
         success: false,
         message: "All Fields are required",
-      });
-    }
-
-    // Checking for LNM id only ( @lnmiit.ac.in )
-    if (!email.includes("@lnmiit.ac.in")) {
-      return res.status(403).send({
-        success: false,
-        message: "Please enter a valid LNMIIT email",
       });
     }
 
@@ -45,19 +37,12 @@ exports.signup = async (req, res) => {
       });
     }
 
-    const response = await OTP.find({ email }).sort({ createdAt: -1 }).limit(1);
-    console.log(response);
-    if (response.length === 0) {
-      // OTP not found for the email
+    // Check if employee ID already exists
+    const existingEmployee = await User.findOne({ employeeId });
+    if (existingEmployee) {
       return res.status(400).json({
         success: false,
-        message: "The OTP is not valid",
-      });
-    } else if (otp !== response[0].otp) {
-      // Invalid OTP
-      return res.status(400).json({
-        success: false,
-        message: "The OTP is not valid",
+        message: "Employee ID already exists. Please use a different ID.",
       });
     }
 
@@ -65,11 +50,11 @@ exports.signup = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // create entry in db
-
     const user = await User.create({
+      employeeId,
       email,
       password: hashedPassword,
-      accountType: accountType,
+      role: role,
     });
     return res.status(200).json({
       success: true,

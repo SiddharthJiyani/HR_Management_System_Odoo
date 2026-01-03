@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
+    employeeId: {
+        type: String,
+        required: [true, 'Employee ID is required'],
+        unique: true,
+        trim: true
+    },
     firstName: {
         type: String,
         default: "",
@@ -16,21 +22,16 @@ const userSchema = new mongoose.Schema({
         required: [true, 'Please enter your email'],
         unique: true,
         trim: true,
-        lowercase: true,
-        // validate: {
-        //     validator: function(v) {
-        //         return /^([\w-\.]+@lnmiit\.ac\.in)$/.test(v);
-        //     },
-        //     message: props => `${props.value} is not a valid LNMIIT email!`
-        // }
+        lowercase: true
     },
     password: {
         type: String,
+        required: [true, 'Password is required']
     },
-    accountType: {
+    role: {
         type: String,
-        enum: ['student', 'admin'],
-        default: 'student',
+        enum: ['employee', 'hr' , `admin`],
+        default: 'employee',
         required: [true]
     },
     profilePhoto: {
