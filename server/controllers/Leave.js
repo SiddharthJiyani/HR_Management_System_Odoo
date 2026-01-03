@@ -423,56 +423,71 @@ exports.updateLeaveStatus = async (req, res) => {
       leave.approvedBy = approver.id;
       leave.approvedAt = new Date();
 
-      // Fetch employee separately to update balance
-      const employee = await Employee.findById(leave.employee);
-      
-      if (employee) {
-        console.log('Found employee:', { employeeId: employee._id, currentBalance: employee.leaveBalance });
+      // Try to update employee balance, but don't fail the approval if it fails
+      try {
+        const employee = await Employee.findById(leave.employee);
         
-        // Initialize leaveBalance if it doesn't exist
-        if (!employee.leaveBalance) {
-          employee.leaveBalance = {
-            vacation: 20,
-            sick: 10,
-            personal: 5,
-            unpaid: 0
-          };
-        }
-        
-        // Map leave types to balance keys
-        const leaveTypeToKey = {
-          'paid': 'vacation',
-          'annual': 'vacation',
-          'vacation': 'vacation',
-          'sick': 'sick',
-          'casual': 'personal',
-          'personal': 'personal',
-          'maternity': 'unpaid',
-          'paternity': 'unpaid',
-          'unpaid': 'unpaid'
-        };
-        
-        const leaveTypeKey = leaveTypeToKey[leave.leaveType];
-        console.log('Leave type mapping:', { leaveType: leave.leaveType, leaveTypeKey });
-        
-        // Deduct balance only for paid leave types
-        if (leaveTypeKey && leaveTypeKey !== 'unpaid') {
-          // Ensure the balance field exists
-          if (typeof employee.leaveBalance[leaveTypeKey] !== 'number') {
-            employee.leaveBalance[leaveTypeKey] = leaveTypeKey === 'vacation' ? 20 : leaveTypeKey === 'sick' ? 10 : 5;
+        if (employee) {
+          console.log('Found employee:', { employeeId: employee._id, currentBalance: employee.leaveBalance });
+          
+          // Initialize leaveBalance if it doesn't exist
+          if (!employee.leaveBalance) {
+            employee.leaveBalance = {
+              vacation: 20,
+              sick: 10,
+              personal: 5,
+              unpaid: 0
+            };
           }
           
-          // Check if sufficient balance
-          if (employee.leaveBalance[leaveTypeKey] >= leave.totalDays) {
-            employee.leaveBalance[leaveTypeKey] -= leave.totalDays;
-            await employee.save();
-            console.log('Balance deducted successfully:', { newBalance: employee.leaveBalance[leaveTypeKey] });
-          } else {
-            console.warn(`Warning: Insufficient leave balance. Available: ${employee.leaveBalance[leaveTypeKey]}, Requested: ${leave.totalDays}`);
+          // Map leave types to balance keys
+          const leaveTypeToKey = {
+            'paid': 'vacation',
+            'annual': 'vacation',
+            'vacation': 'vacation',
+            'sick': 'sick',
+            'casual': 'personal',
+            'personal': 'personal',
+            'maternity': 'unpaid',
+            'paternity': 'unpaid',
+            'unpaid': 'unpaid'
+          };
+          
+          const leaveTypeKey = leaveTypeToKey[leave.leaveType];
+          console.log('Leave type mapping:', { leaveType: leave.leaveType, leaveTypeKey });
+          
+          // Deduct balance only for paid leave types
+          if (leaveTypeKey && leaveTypeKey !== 'unpaid') {
+            // Ensure the balance field exists
+            if (typeof employee.leaveBalance[leaveTypeKey] !== 'number') {
+              employee.leaveBalance[leaveTypeKey] = leaveTypeKey === 'vacation' ? 20 : leaveTypeKey === 'sick' ? 10 : 5;
+            }
+            
+            // Check if sufficient balance
+            if (employee.leaveBalance[leaveTypeKey] >= leave.totalDays) {
+              employee.leaveBalance[leaveTypeKey] -= leave.totalDays;
+              
+              // Mark leaveBalance as modified (needed for nested objects)
+              employee.markModified('leaveBalance');
+              
+              // Use findByIdAndUpdate to avoid full validation
+              await Employee.findByIdAndUpdate(
+                employee._id,
+                { $set: { leaveBalance: employee.leaveBalance } },
+                { runValidators: false }
+              );
+              console.log('Balance deducted successfully:', { newBalance: employee.leaveBalance[leaveTypeKey] });
+            } else {
+              console.warn(`Warning: Insufficient leave balance. Available: ${employee.leaveBalance[leaveTypeKey]}, Requested: ${leave.totalDays}`);
+            }
           }
+        } else {
+          console.warn('Employee not found for leave request, but still approving leave');
         }
-      } else {
-        console.warn('Employee not found for leave request, but still approving leave');
+      } catch (empError) {
+        // Log the error but don't fail the approval
+        console.error('Error updating employee balance:', empError.message);
+        console.error('Continuing with leave approval...');
       }
     } else {
       leave.rejectedBy = approver.id;
