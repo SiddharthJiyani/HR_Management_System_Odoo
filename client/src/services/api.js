@@ -122,6 +122,24 @@ export const employeeAPI = {
   getStats: async () => {
     return apiCall('/employees/stats');
   },
+
+  // Get employee salary details (role-based access)
+  getSalary: async (id) => {
+    return apiCall(`/employees/${id}/salary`);
+  },
+
+  // Get my salary details
+  getMySalary: async () => {
+    return apiCall('/employees/me/salary');
+  },
+
+  // Update employee salary (Admin only)
+  updateSalary: async (id, data) => {
+    return apiCall(`/employees/${id}/salary`, {
+      method: 'PUT',
+      body: data,
+    });
+  },
 };
 
 // Attendance API functions

@@ -1,236 +1,155 @@
-import React, { useState } from 'react';
-import { Card, Avatar, Button, Input, Badge } from '../components/ui';
+import React, { useState, useEffect } from 'react';
+import { Tabs, Button } from '../components/ui';
+import { ProfileHeader, ResumeTab, PrivateInfoTab } from '../components/profile';
+import { SalaryInfoTab } from '../components/salary';
+import { employeeAPI } from '../services/api';
+import { useAuth } from '../context';
 
-const BackIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-  </svg>
-);
+const MyProfile = () => {
+  const { user, isAdmin } = useAuth();
+  const [activeTab, setActiveTab] = useState('resume');
+  const [loading, setLoading] = useState(true);
+  const [employeeData, setEmployeeData] = useState(null);
+  const [salaryData, setSalaryData] = useState(null);
+  const [error, setError] = useState(null);
 
-const SaveIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-  </svg>
-);
+  // Fetch employee profile data
+  useEffect(() => {
+    fetchProfileData();
+  }, []);
 
-const CameraIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-  </svg>
-);
-
-const MyProfile = ({ user, onBack, onSave }) => {
-  const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    address: user?.address || '',
-    emergencyContact: user?.emergencyContact || '',
-    emergencyPhone: user?.emergencyPhone || '',
-  });
-  const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [saveMessage, setSaveMessage] = useState(null);
-
-  const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    setHasChanges(true);
-    setSaveMessage(null);
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSaveMessage(null);
+  const fetchProfileData = async () => {
     try {
-      await onSave?.(formData);
-      setHasChanges(false);
-      setSaveMessage({ type: 'success', text: 'Profile updated successfully!' });
-      setTimeout(() => setSaveMessage(null), 3000);
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      setSaveMessage({ type: 'error', text: error.message || 'Failed to save profile. Please try again.' });
+      setLoading(true);
+      setError(null);
+      
+      // Fetch profile data
+      const profileResponse = await employeeAPI.getMyProfile();
+      if (profileResponse.success) {
+        setEmployeeData(profileResponse.data);
+      } else {
+        setError(profileResponse.message || 'Failed to load profile');
+      }
+
+      // Fetch salary data
+      const salaryResponse = await employeeAPI.getMySalary();
+      if (salaryResponse.success) {
+        setSalaryData(salaryResponse.data);
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+      setError('Failed to load profile data');
     } finally {
-      setIsSaving(false);
+      setLoading(false);
     }
   };
 
-  return (
-    <div className="page-fade-in space-y-6 max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={onBack} icon={<BackIcon />}>
-          Back
-        </Button>
-        <div className="flex items-center gap-3">
-          {saveMessage && (
-            <span className={`text-sm ${saveMessage.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-              {saveMessage.text}
-            </span>
-          )}
-          {hasChanges && (
-            <Button 
-              variant="primary" 
-              onClick={handleSave}
-              disabled={isSaving}
-              icon={<SaveIcon />}
-            >
-              {isSaving ? 'Saving...' : 'Save Changes'}
-            </Button>
-          )}
+  const handleProfileUpdate = async (updatedData) => {
+    try {
+      const response = await employeeAPI.updateMyProfile(updatedData);
+      if (response.success) {
+        setEmployeeData(response.data);
+        // Show success message
+        alert('Profile updated successfully!');
+      } else {
+        alert(response.message || 'Failed to update profile');
+      }
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      alert('Failed to update profile');
+    }
+  };
+
+  const handleSalaryUpdate = async (updatedSalary) => {
+    try {
+      const response = await employeeAPI.updateSalary(employeeData._id, updatedSalary);
+      if (response.success) {
+        setSalaryData(response.data);
+        alert('Salary updated successfully!');
+      } else {
+        alert(response.message || 'Failed to update salary');
+      }
+    } catch (err) {
+      console.error('Error updating salary:', err);
+      alert('Failed to update salary');
+    }
+  };
+
+  const tabs = [
+    { id: 'resume', label: 'Resume' },
+    { id: 'private', label: 'Private Information' },
+    { id: 'salary', label: 'Salary Information' },
+  ];
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+            <p className="text-neutral-600">Loading profile...</p>
+          </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Profile Header Card */}
-      <Card className="relative overflow-hidden">
-        {/* Background */}
-        <div className="absolute inset-0 h-28 bg-gradient-to-br from-primary-300 to-primary-500 opacity-30" />
-        
-        <div className="relative pt-12 pb-6 px-6 text-center">
-          {/* Avatar with Edit Button */}
-          <div className="relative inline-block mb-4">
-            <Avatar 
-              src={user?.avatar}
-              name={user?.name}
-              size="xl"
-              className="ring-4 ring-white shadow-soft-lg"
-            />
-            <button className="absolute bottom-0 right-0 w-10 h-10 bg-white rounded-full shadow-soft flex items-center justify-center text-neutral-600 hover:text-primary-600 hover:bg-primary-50 transition-colors">
-              <CameraIcon />
-            </button>
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-error mb-4">{error}</p>
+            <Button onClick={fetchProfileData}>Retry</Button>
           </div>
-
-          <h1 className="text-2xl font-bold text-neutral-900 mb-1">
-            {user?.name}
-          </h1>
-          <p className="text-neutral-500">{user?.role}</p>
-          {user?.department && (
-            <Badge variant="primary" className="mt-2">
-              {user?.department}
-            </Badge>
-          )}
         </div>
-      </Card>
+      </div>
+    );
+  }
 
-      {/* Personal Information */}
-      <Card>
-        <h2 className="text-lg font-semibold text-neutral-900 mb-6">
-          Personal Information
-        </h2>
-        <div className="grid md:grid-cols-2 gap-4">
-          <Input 
-            label="Full Name"
-            value={formData.name}
-            onChange={(e) => handleChange('name', e.target.value)}
-            placeholder="Enter your full name"
-          />
-          <Input 
-            label="Email Address"
-            type="email"
-            value={formData.email}
-            onChange={(e) => handleChange('email', e.target.value)}
-            placeholder="Enter your email"
-          />
-          <Input 
-            label="Phone Number"
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => handleChange('phone', e.target.value)}
-            placeholder="+1 (555) 000-0000"
-          />
-          <Input 
-            label="Address"
-            value={formData.address}
-            onChange={(e) => handleChange('address', e.target.value)}
-            placeholder="Enter your address"
-          />
-        </div>
-      </Card>
+  return (
+    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
+      {/* Profile Header */}
+      <ProfileHeader 
+        employee={employeeData}
+        onUpdate={handleProfileUpdate}
+        isEditable={true}
+        isAdmin={isAdmin}
+      />
 
-      {/* Emergency Contact */}
-      <Card>
-        <h2 className="text-lg font-semibold text-neutral-900 mb-6">
-          Emergency Contact
-        </h2>
-        <div className="grid md:grid-cols-2 gap-4">
-          <Input 
-            label="Contact Name"
-            value={formData.emergencyContact}
-            onChange={(e) => handleChange('emergencyContact', e.target.value)}
-            placeholder="Enter emergency contact name"
-          />
-          <Input 
-            label="Contact Phone"
-            type="tel"
-            value={formData.emergencyPhone}
-            onChange={(e) => handleChange('emergencyPhone', e.target.value)}
-            placeholder="+1 (555) 000-0000"
-          />
-        </div>
-      </Card>
+      {/* Tabs Navigation */}
+      <Tabs
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
-      {/* Employment Info (Read Only) */}
-      <Card>
-        <h2 className="text-lg font-semibold text-neutral-900 mb-6">
-          Employment Information
-          <span className="ml-2 text-sm font-normal text-neutral-400">
-            (Read Only)
-          </span>
-        </h2>
-        <div className="grid md:grid-cols-2 gap-4">
-          <Input 
-            label="Employee ID"
-            value={user?.employeeId || 'EMP001'}
-            readOnly
+      {/* Tab Content */}
+      <div className="min-h-[400px]">
+        {activeTab === 'resume' && (
+          <ResumeTab
+            data={employeeData}
+            onUpdate={handleProfileUpdate}
+            isEditable={true}
           />
-          <Input 
-            label="Department"
-            value={user?.department || 'Engineering'}
-            readOnly
-          />
-          <Input 
-            label="Role"
-            value={user?.role || 'Software Engineer'}
-            readOnly
-          />
-          <Input 
-            label="Join Date"
-            value={user?.joinDate || 'January 15, 2023'}
-            readOnly
-          />
-        </div>
-      </Card>
+        )}
 
-      {/* Password Section */}
-      <Card>
-        <h2 className="text-lg font-semibold text-neutral-900 mb-6">
-          Security
-        </h2>
-        <div className="flex items-center justify-between p-4 bg-neutral-50 rounded-xl">
-          <div>
-            <p className="font-medium text-neutral-900">Password</p>
-            <p className="text-sm text-neutral-500">Last changed 30 days ago</p>
-          </div>
-          <Button variant="outline" size="sm">
-            Change Password
-          </Button>
-        </div>
-      </Card>
+        {activeTab === 'private' && (
+          <PrivateInfoTab
+            data={employeeData}
+            onUpdate={handleProfileUpdate}
+            isEditable={true}
+          />
+        )}
 
-      {/* Save Button - Mobile */}
-      {hasChanges && (
-        <div className="fixed bottom-4 left-4 right-4 md:hidden">
-          <Button 
-            variant="primary" 
-            className="w-full"
-            onClick={handleSave}
-            disabled={isSaving}
-            icon={<SaveIcon />}
-          >
-            {isSaving ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </div>
-      )}
+        {activeTab === 'salary' && salaryData && (
+          <SalaryInfoTab
+            data={salaryData}
+            onUpdate={handleSalaryUpdate}
+            isAdmin={isAdmin}
+          />
+        )}
+      </div>
     </div>
   );
 };

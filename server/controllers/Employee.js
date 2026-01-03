@@ -39,23 +39,13 @@ exports.getAllEmployees = async (req, res) => {
       Employee.countDocuments(query)
     ]);
 
-    // Get today's attendance status for each employee
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const employeesWithStatus = await Promise.all(
-      employees.map(async (emp) => {
-        const attendance = await Attendance.findOne({
-          employee: emp._id,
-          date: today
-        });
-        
-        return {
-          ...emp.toObject(),
-          currentAttendanceStatus: attendance?.status || 'not-checked-in'
-        };
-      })
-    );
+    // Employees already have currentAttendanceStatus field updated by check-in/out
+    // Just return them as-is, the field is already set correctly
+    const employeesWithStatus = employees.map(emp => ({
+      ...emp.toObject(),
+      // Use the stored field - it's updated by check-in/out controllers
+      currentAttendanceStatus: emp.currentAttendanceStatus || 'not-checked-in'
+    }));
 
     res.status(200).json({
       success: true,
@@ -92,12 +82,31 @@ exports.getEmployeeById = async (req, res) => {
       });
     }
 
-    // If not HR/Admin, hide sensitive fields
     let employeeData = employee.toObject();
-    if (requestingUser.role === 'employee' && requestingUser.id !== employee.user.toString()) {
-      delete employeeData.salary;
+
+    // Role-based data filtering
+    if (requestingUser.role === 'hr') {
+      // HR can see overall salary but not detailed breakdown
+      employeeData.salary = {
+        monthlyWage: employee.salary.monthlyWage,
+        yearlyWage: employee.salary.yearlyWage,
+        currency: employee.salary.currency,
+        grossSalary: employee.salary.grossSalary,
+        netSalary: employee.salary.netSalary,
+        // Hide detailed components and deductions
+        components: undefined,
+        deductions: undefined
+      };
+      // HR cannot see bank details
       delete employeeData.bankDetails;
+    } else if (requestingUser.role === 'employee') {
+      // Employee can only see their own full profile
+      if (requestingUser.id !== employee.user.toString()) {
+        delete employeeData.salary;
+        delete employeeData.bankDetails;
+      }
     }
+    // Admin can see everything
 
     // Get attendance summary for current month
     const now = new Date();
@@ -260,12 +269,31 @@ exports.updateEmployee = async (req, res) => {
       });
     }
 
-    // If employee is updating their own profile, restrict fields
-    if (requestingUser.role === 'employee') {
-      // Employees can only update these fields
-      const allowedFields = ['phone', 'address', 'emergencyContact', 'profilePhoto'];
-      const filteredUpdates = {};
+    // Role-based update permissions
+    if (requestingUser.role === 'hr') {
+      // HR can view but NOT edit employee profiles
+      return res.status(403).json({
+        success: false,
+        message: 'HR can view employee profiles but cannot edit them. Only Admin can edit.'
+      });
+    } else if (requestingUser.role === 'employee') {
+      // Employees can only update their own profile
+      if (requestingUser.id !== employee.user.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only update your own profile'
+        });
+      }
+
+      // Employees can update these fields only (NOT salary)
+      const allowedFields = [
+        'phone', 'address', 'emergencyContact', 'profilePhoto',
+        'about', 'skills', 'certifications', 'interests',
+        'nationality', 'personalEmail', 'maritalStatus', 'residingAddress',
+        'bankDetails' // Employee can update bank details
+      ];
       
+      const filteredUpdates = {};
       allowedFields.forEach(field => {
         if (updates[field] !== undefined) {
           filteredUpdates[field] = updates[field];
@@ -273,8 +301,8 @@ exports.updateEmployee = async (req, res) => {
       });
 
       Object.assign(employee, filteredUpdates);
-    } else {
-      // HR/Admin can update all fields
+    } else if (requestingUser.role === 'admin') {
+      // Admin can update everything including salary
       Object.assign(employee, updates);
     }
 
@@ -309,8 +337,13 @@ exports.updateMyProfile = async (req, res) => {
       });
     }
 
-    // Employees can only update these fields
-    const allowedFields = ['phone', 'address', 'emergencyContact', 'profilePhoto'];
+    // Employees can update these fields (NOT salary)
+    const allowedFields = [
+      'phone', 'address', 'emergencyContact', 'profilePhoto',
+      'about', 'skills', 'certifications', 'interests',
+      'nationality', 'personalEmail', 'maritalStatus', 'residingAddress',
+      'bankDetails' // Employee can update their bank details
+    ];
     
     allowedFields.forEach(field => {
       if (updates[field] !== undefined) {
@@ -427,6 +460,154 @@ exports.getEmployeeStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch employee statistics'
+    });
+  }
+};
+
+// Get employee salary details (Admin only for edit, Employee can view own)
+exports.getEmployeeSalary = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const requestingUser = req.user;
+
+    const employee = await Employee.findById(id).select('salary workingSchedule firstName lastName employeeId');
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    // Check permissions
+    if (requestingUser.role === 'employee' && requestingUser.id !== employee.user.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only view your own salary information'
+      });
+    }
+
+    if (requestingUser.role === 'hr') {
+      // HR can only see basic salary info, not detailed breakdown
+      return res.status(200).json({
+        success: true,
+        data: {
+          monthlyWage: employee.salary.monthlyWage,
+          yearlyWage: employee.salary.yearlyWage,
+          grossSalary: employee.salary.grossSalary,
+          netSalary: employee.salary.netSalary,
+          currency: employee.salary.currency
+        },
+        message: 'HR can only view basic salary information'
+      });
+    }
+
+    // Admin and Employee (owner) can see full breakdown
+    res.status(200).json({
+      success: true,
+      data: {
+        salary: employee.salary,
+        workingSchedule: employee.workingSchedule,
+        employeeInfo: {
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          employeeId: employee.employeeId
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get employee salary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch salary information'
+    });
+  }
+};
+
+// Update employee salary (Admin only)
+exports.updateEmployeeSalary = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const requestingUser = req.user;
+    const { salary, workingSchedule } = req.body;
+
+    // Only Admin can update salary
+    if (requestingUser.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only Admin can update salary information'
+      });
+    }
+
+    const employee = await Employee.findById(id);
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    // Update salary and working schedule
+    if (salary) {
+      Object.assign(employee.salary, salary);
+    }
+
+    if (workingSchedule) {
+      Object.assign(employee.workingSchedule, workingSchedule);
+    }
+
+    await employee.save(); // Pre-save hook will auto-calculate components
+
+    res.status(200).json({
+      success: true,
+      message: 'Salary information updated successfully',
+      data: {
+        salary: employee.salary,
+        workingSchedule: employee.workingSchedule
+      }
+    });
+  } catch (error) {
+    console.error('Update employee salary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update salary information'
+    });
+  }
+};
+
+// Get my salary details (Employee)
+exports.getMySalary = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const employee = await Employee.findOne({ user: userId })
+      .select('salary workingSchedule firstName lastName employeeId');
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee profile not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        salary: employee.salary,
+        workingSchedule: employee.workingSchedule,
+        employeeInfo: {
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          employeeId: employee.employeeId
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get my salary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch salary information'
     });
   }
 };

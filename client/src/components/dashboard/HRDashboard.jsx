@@ -12,18 +12,11 @@ import { useAuth } from '../../context/AuthContext';
 import { employeeAPI, attendanceAPI } from '../../services/api';
 
 // Helper function to format employee data from API
-const formatEmployeeData = (employee, todayAttendance = null) => {
+const formatEmployeeData = (employee) => {
   const fullName = `${employee.firstName} ${employee.lastName}`.trim();
   
-  // Determine status from today's attendance
-  let status = 'not-checked-in';
-  if (todayAttendance) {
-    if (todayAttendance.status === 'leave') status = 'leave';
-    else if (todayAttendance.status === 'absent') status = 'absent';
-    else if (todayAttendance.checkIn && !todayAttendance.checkOut) status = 'present';
-    else if (todayAttendance.checkIn && todayAttendance.checkOut) status = 'present';
-    else if (todayAttendance.status === 'late') status = 'present';
-  }
+  // Use currentAttendanceStatus from employee model (updated by check-in/out)
+  const status = employee.currentAttendanceStatus || 'not-checked-in';
 
   return {
     id: employee._id,
@@ -158,11 +151,11 @@ const HRDashboard = () => {
       const response = await attendanceAPI.getTodayStatus();
       
       if (response.success && response.data) {
-        const todayRecord = response.data;
-        if (todayRecord.checkIn && !todayRecord.checkOut) {
+        const { isCheckedIn: checkedIn, checkInTime: checkInTimeStr } = response.data;
+        if (checkedIn && checkInTimeStr) {
           setIsCheckedIn(true);
-          setCheckInTime(new Date(todayRecord.checkIn));
-        } else if (todayRecord.checkIn && todayRecord.checkOut) {
+          setCheckInTime(new Date(checkInTimeStr));
+        } else {
           setIsCheckedIn(false);
           setCheckInTime(null);
         }
@@ -229,11 +222,14 @@ const HRDashboard = () => {
         setIsCheckedIn(true);
         setCheckInTime(new Date());
         // Refresh employees to update status
-        fetchEmployees();
+        await fetchEmployees();
+        console.log('✅ Check-in successful');
+      } else {
+        alert(response.message || 'Failed to check in');
       }
     } catch (err) {
       console.error('Check-in error:', err);
-      alert('Failed to check in. Please try again.');
+      alert(err.message || 'Failed to check in. Please try again.');
     }
   }, [fetchEmployees]);
 
@@ -242,16 +238,20 @@ const HRDashboard = () => {
       const response = await attendanceAPI.checkOut();
       
       if (response.success) {
+        const workedHours = checkInTime ? ((new Date() - checkInTime) / (1000 * 60 * 60)).toFixed(2) : 0;
         setIsCheckedIn(false);
         setCheckInTime(null);
         // Refresh employees to update status
-        fetchEmployees();
+        await fetchEmployees();
+        console.log(`✅ Check-out successful. Worked ${workedHours} hours`);
+      } else {
+        alert(response.message || 'Failed to check out');
       }
     } catch (err) {
       console.error('Check-out error:', err);
-      alert('Failed to check out. Please try again.');
+      alert(err.message || 'Failed to check out. Please try again.');
     }
-  }, [fetchEmployees]);
+  }, [fetchEmployees, checkInTime]);
 
   // Profile save handler
   const handleSaveProfile = useCallback(async (data) => {

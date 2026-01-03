@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Avatar, StatusDot, Button, Badge, SearchBar } from '../../components/ui';
 import { Dropdown, DropdownItem } from '../../components/ui/Dropdown';
-import { employeeAPI } from '../../services/api';
+import { employeeAPI, attendanceAPI } from '../../services/api';
 import Attendance from '../Attendance';
 import TimeOff from '../TimeOff';
 
@@ -43,11 +43,8 @@ const RefreshIcon = () => (
 const formatEmployeeData = (employee) => {
   const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unknown';
   
-  // Determine status
-  let status = 'not-checked-in';
-  if (employee.status === 'leave' || employee.onLeave) status = 'leave';
-  else if (employee.status === 'absent') status = 'absent';
-  else if (employee.status === 'present' || employee.isCheckedIn) status = 'present';
+  // Use currentAttendanceStatus from employee model (updated by check-in/out)
+  const status = employee.currentAttendanceStatus || 'not-checked-in';
 
   return {
     id: employee._id,
@@ -303,10 +300,32 @@ const AdminDashboard = () => {
     }
   }, []);
 
+  // Fetch today's attendance status
+  const fetchTodayStatus = useCallback(async () => {
+    try {
+      const response = await attendanceAPI.getTodayStatus();
+      
+      if (response.success && response.data) {
+        const { isCheckedIn: checkedIn, checkInTime: checkInTimeStr } = response.data;
+        if (checkedIn && checkInTimeStr) {
+          setIsCheckedIn(true);
+          setCheckInTime(new Date(checkInTimeStr));
+        } else {
+          setIsCheckedIn(false);
+          setCheckInTime(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching today status:', err);
+      // Not critical, just log the error
+    }
+  }, []);
+
   // Fetch on mount
   useEffect(() => {
     fetchEmployees();
-  }, [fetchEmployees]);
+    fetchTodayStatus();
+  }, [fetchEmployees, fetchTodayStatus]);
 
   const handleEmployeeClick = (employee) => {
     navigate(`/admin/employee/${employee.id}`);
@@ -321,14 +340,43 @@ const AdminDashboard = () => {
     navigate('/signin');
   };
 
-  const handleCheckIn = () => {
-    setIsCheckedIn(true);
-    setCheckInTime(new Date());
+  const handleCheckIn = async () => {
+    try {
+      const response = await attendanceAPI.checkIn();
+      
+      if (response.success) {
+        setIsCheckedIn(true);
+        setCheckInTime(new Date());
+        // Optionally refresh employees to update status
+        await fetchEmployees();
+        console.log('✅ Check-in successful');
+      } else {
+        alert(response.message || 'Failed to check in');
+      }
+    } catch (err) {
+      console.error('Check-in error:', err);
+      alert(err.message || 'Failed to check in. Please try again.');
+    }
   };
 
-  const handleCheckOut = () => {
-    setIsCheckedIn(false);
-    setCheckInTime(null);
+  const handleCheckOut = async () => {
+    try {
+      const response = await attendanceAPI.checkOut();
+      
+      if (response.success) {
+        setIsCheckedIn(false);
+        const workedHours = checkInTime ? ((new Date() - checkInTime) / (1000 * 60 * 60)).toFixed(2) : 0;
+        setCheckInTime(null);
+        // Optionally refresh employees to update status
+        await fetchEmployees();
+        console.log(`✅ Check-out successful. Worked ${workedHours} hours`);
+      } else {
+        alert(response.message || 'Failed to check out');
+      }
+    } catch (err) {
+      console.error('Check-out error:', err);
+      alert(err.message || 'Failed to check out. Please try again.');
+    }
   };
 
   const userStatus = isCheckedIn ? 'present' : 'not-checked-in';

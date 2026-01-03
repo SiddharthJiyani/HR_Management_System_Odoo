@@ -260,17 +260,23 @@ exports.getAllAttendance = async (req, res) => {
       attendanceMap.set(record.employee._id.toString(), record);
     });
 
-    // Combine employees with their attendance
+    // Combine employees with their attendance - format for frontend
     const result = employees.map(emp => {
       const attendance = attendanceMap.get(emp._id.toString());
+      const fullName = `${emp.firstName} ${emp.lastName}`.trim();
+      
       return {
-        employee: emp,
-        attendance: attendance || {
-          status: 'not-checked-in',
-          checkIn: null,
-          checkOut: null,
-          totalHours: 0
-        }
+        employeeId: emp._id,
+        employeeName: fullName,
+        department: emp.department,
+        designation: emp.designation,
+        avatar: emp.profilePhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=FFD966&color=000&size=150`,
+        date: targetDate.toISOString().split('T')[0],
+        checkIn: attendance?.checkIn?.time || null,
+        checkOut: attendance?.checkOut?.time || null,
+        status: attendance?.status || 'not-checked-in',
+        totalHours: attendance?.totalHours || 0,
+        overtimeHours: attendance?.overtimeHours || 0
       };
     });
 
@@ -279,29 +285,27 @@ exports.getAllAttendance = async (req, res) => {
     if (status) {
       filteredResult = result.filter(item => {
         if (status === 'not-checked-in') {
-          return !item.attendance.checkIn;
+          return !item.checkIn;
         }
-        return item.attendance.status === status;
+        return item.status === status;
       });
     }
 
     // Calculate stats
     const stats = {
       total: employees.length,
-      present: result.filter(r => r.attendance.status === 'present').length,
-      absent: result.filter(r => r.attendance.status === 'absent').length,
-      leave: result.filter(r => r.attendance.status === 'leave').length,
-      late: result.filter(r => r.attendance.status === 'late').length,
-      notCheckedIn: result.filter(r => !r.attendance.checkIn).length
+      present: result.filter(r => r.status === 'present').length,
+      absent: result.filter(r => r.status === 'absent').length,
+      leave: result.filter(r => r.status === 'leave').length,
+      late: result.filter(r => r.status === 'late').length,
+      notCheckedIn: result.filter(r => !r.checkIn).length
     };
 
     res.status(200).json({
       success: true,
-      data: {
-        records: filteredResult,
-        stats,
-        date: targetDate
-      }
+      data: filteredResult,
+      stats,
+      date: targetDate
     });
   } catch (error) {
     console.error('Get all attendance error:', error);

@@ -364,24 +364,37 @@ const Attendance = ({ currentUser, isAdmin = false }) => {
 
       // Try to fetch from API first
       try {
-        const response = await attendanceAPI.getAllAttendance({
+        const response = await attendanceAPI.getAll({
           date: selectedDate.toISOString().split('T')[0],
         });
 
-        if (response.success && response.data?.length > 0) {
+        if (response.success && response.data) {
           setAttendanceRecords(response.data);
           
-          // Calculate stats
-          const present = response.data.filter(r => r.status === 'present').length;
-          const absent = response.data.filter(r => r.status === 'absent').length;
-          const onLeave = response.data.filter(r => r.status === 'leave').length;
-          const late = response.data.filter(r => r.status === 'late').length;
+          // Calculate stats from response or data
+          if (response.stats) {
+            setStats({
+              present: response.stats.present || 0,
+              absent: response.stats.absent || 0,
+              onLeave: response.stats.leave || 0,
+              late: response.stats.late || 0,
+              totalHours: '0',
+              avgHours: '0'
+            });
+          } else {
+            // Calculate stats from data
+            const present = response.data.filter(r => r.status === 'present').length;
+            const absent = response.data.filter(r => r.status === 'absent' || r.status === 'not-checked-in').length;
+            const onLeave = response.data.filter(r => r.status === 'leave').length;
+            const late = response.data.filter(r => r.status === 'late').length;
 
-          setStats({ present, absent, onLeave, late, totalHours: '0', avgHours: '0' });
+            setStats({ present, absent, onLeave, late, totalHours: '0', avgHours: '0' });
+          }
           return;
         }
       } catch (apiError) {
-        console.log('API not available, using mock data');
+        console.log('API error:', apiError);
+        console.log('Using mock data');
       }
 
       // Fallback to mock data

@@ -72,8 +72,8 @@ const EmployeeDirectory = ({ employees, onEmployeeClick, onNewEmployee, searchVa
   // Group by status for stats
   const stats = {
     total: employees.length,
-    present: employees.filter(e => e.status === 'present').length,
-    absent: employees.filter(e => e.status === 'absent').length,
+    present: employees.filter(e => e.status === 'present' || e.status === 'late').length,
+    absent: employees.filter(e => e.status === 'absent' || e.status === 'not-checked-in').length,
     leave: employees.filter(e => e.status === 'leave').length,
   };
 
