@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { Card, Button, Badge, Input, SearchBar, Avatar } from '../components/ui';
 import { leaveAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -220,6 +221,7 @@ const NewRequestModal = ({ isOpen, onClose, onSubmit, submitting, employeeName }
     allocation: '',
     attachment: null,
   });
+  const [isClosing, setIsClosing] = useState(false);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -229,6 +231,14 @@ const NewRequestModal = ({ isOpen, onClose, onSubmit, submitting, employeeName }
     if (e.target.files[0]) {
       setFormData(prev => ({ ...prev, attachment: e.target.files[0] }));
     }
+  };
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsClosing(false);
+      onClose();
+    }, 200);
   };
 
   const handleSubmit = () => {
@@ -249,93 +259,117 @@ const NewRequestModal = ({ isOpen, onClose, onSubmit, submitting, employeeName }
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+  return ReactDOM.createPortal(
+    <div 
+      className="fixed inset-0 overflow-y-auto"
+      style={{ zIndex: 9999 }}
+    >
+      {/* Backdrop - subtle overlay */}
       <div 
-        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-        onClick={onClose}
+        className={`fixed inset-0 bg-neutral-900/25 transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'opacity-100'}`}
+        style={{ zIndex: 9999 }}
+        onClick={handleClose}
       />
       
-      {/* Modal */}
-      <Card className="relative w-full max-w-md animate-fade-in z-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-neutral-100">
-          <h2 className="text-lg font-semibold text-neutral-900">Time off Type Request</h2>
-          <button 
-            onClick={onClose}
-            className="p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-
-        {/* Form */}
-        <div className="space-y-5">
-          {/* Employee */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">Employee</label>
-            <div className="px-4 py-3 bg-neutral-50 rounded-xl border border-neutral-100">
-              <span className="text-sm font-medium text-neutral-800">{employeeName}</span>
-            </div>
-          </div>
-
-          {/* Time off Type */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">Time off Type</label>
-            <select
-              value={formData.type}
-              onChange={(e) => handleChange('type', e.target.value)}
-              className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-800 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 transition-all appearance-none cursor-pointer"
-            >
-              <option value="paid">Paid Time Off</option>
-              <option value="sick">Sick Leave</option>
-              <option value="unpaid">Unpaid Leaves</option>
-            </select>
-          </div>
-
-          {/* Validity Period */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">Validity Period</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="date"
-                value={formData.startDate}
-                onChange={(e) => handleChange('startDate', e.target.value)}
-                className="flex-1 px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-800 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 transition-all"
-              />
-              <span className="text-sm text-neutral-500 font-medium">To</span>
-              <input
-                type="date"
-                value={formData.endDate}
-                onChange={(e) => handleChange('endDate', e.target.value)}
-                className="flex-1 px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-800 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Allocation */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">Allocation</label>
-            <div className="flex items-center gap-3">
-              <div className="px-4 py-3 bg-primary-50 rounded-xl border border-primary-100 min-w-[80px] text-center">
-                <span className="text-lg font-bold text-primary-600">
-                  {calculateDays().toFixed(2)}
-                </span>
+      {/* Modal container - centers the modal */}
+      <div 
+        className="fixed inset-0 flex items-center justify-center p-4"
+        style={{ zIndex: 10000 }}
+      >
+        <div 
+          className={`relative w-full max-w-md transition-all duration-200 ease-out ${
+            isClosing 
+              ? 'opacity-0 scale-95' 
+              : 'opacity-100 scale-100 animate-modal-enter'
+          }`}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl p-6">
+            {/* Header */}
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <h2 className="text-lg font-semibold text-neutral-900">New Time Off Request</h2>
+                <p className="text-sm text-neutral-500 mt-0.5">Request leave from your balance</p>
               </div>
-              <span className="text-sm text-neutral-600">Days</span>
+              <button 
+                onClick={handleClose}
+                className="p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors -mr-2 -mt-1"
+              >
+                <CloseIcon />
+              </button>
             </div>
-          </div>
 
-          {/* Attachment (for sick leave) */}
-          {formData.type === 'sick' && (
+          {/* Form */}
+          <div className="space-y-4">
+            {/* Employee */}
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-2">Attachment</label>
+              <label className="block text-sm font-medium text-neutral-600 mb-1.5">Employee</label>
+              <div className="px-4 py-3 bg-neutral-50 rounded-xl border border-neutral-200">
+                <span className="text-sm font-medium text-neutral-800">{employeeName}</span>
+              </div>
+            </div>
+
+            {/* Time off Type */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-600 mb-1.5">Time Off Type</label>
+              <div className="relative">
+                <select
+                  value={formData.type}
+                  onChange={(e) => handleChange('type', e.target.value)}
+                  className="w-full px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-800 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 transition-all appearance-none cursor-pointer"
+                >
+                  <option value="paid">Paid Time Off</option>
+                  <option value="sick">Sick Leave</option>
+                  <option value="unpaid">Unpaid Leave</option>
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Validity Period */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-600 mb-1.5">Validity Period</label>
               <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 px-4 py-3 bg-white border border-neutral-200 rounded-xl cursor-pointer hover:bg-neutral-50 transition-colors">
+                <input
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) => handleChange('startDate', e.target.value)}
+                  className="flex-1 px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-800 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 transition-all"
+                />
+                <span className="text-sm text-neutral-400 font-medium">to</span>
+                <input
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(e) => handleChange('endDate', e.target.value)}
+                  className="flex-1 px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm text-neutral-800 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-400/20 transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Allocation */}
+            <div>
+              <label className="block text-sm font-medium text-neutral-600 mb-1.5">Allocation</label>
+              <div className="flex items-center gap-3">
+                <div className="px-4 py-2.5 bg-primary-50 rounded-xl border border-primary-100 min-w-[80px] text-center">
+                  <span className="text-lg font-bold text-primary-600">
+                    {calculateDays().toFixed(2)}
+                  </span>
+                </div>
+                <span className="text-sm text-neutral-500">Days</span>
+              </div>
+            </div>
+
+            {/* Attachment (for sick leave) */}
+            {formData.type === 'sick' && (
+              <div>
+                <label className="block text-sm font-medium text-neutral-600 mb-1.5">Attachment</label>
+                <label className="flex items-center gap-3 px-4 py-3 bg-white border border-dashed border-neutral-300 rounded-xl cursor-pointer hover:bg-neutral-50 hover:border-primary-400 transition-all">
                   <UploadIcon />
                   <span className="text-sm text-neutral-600">
-                    {formData.attachment ? formData.attachment.name : 'Choose file'}
+                    {formData.attachment ? formData.attachment.name : 'Upload certificate'}
                   </span>
                   <input
                     type="file"
@@ -344,33 +378,33 @@ const NewRequestModal = ({ isOpen, onClose, onSubmit, submitting, employeeName }
                     className="hidden"
                   />
                 </label>
-                <span className="text-xs text-neutral-400">(For sick leave certificate)</span>
+                <p className="text-xs text-neutral-400 mt-1.5">Required for sick leave</p>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Actions */}
-        <div className="flex gap-3 mt-8">
-          <Button 
-            variant="outline"
-            onClick={onClose}
-            className="flex-1"
-            disabled={submitting}
-          >
-            Discard
-          </Button>
-          <Button 
-            variant="primary"
-            onClick={handleSubmit}
-            className="flex-1"
-            disabled={submitting}
-          >
-            {submitting ? 'Submitting...' : 'Submit'}
-          </Button>
+          {/* Actions */}
+          <div className="flex gap-3 mt-6 pt-5 border-t border-neutral-100">
+            <button 
+              onClick={handleClose}
+              disabled={submitting}
+              className="flex-1 px-5 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium rounded-xl transition-colors disabled:opacity-50"
+            >
+              Discard
+            </button>
+            <button 
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex-1 px-5 py-3 bg-primary-400 hover:bg-primary-500 text-neutral-900 font-medium rounded-xl transition-colors disabled:opacity-50"
+            >
+              {submitting ? 'Submitting...' : 'Submit'}
+            </button>
+          </div>
         </div>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 };
 
