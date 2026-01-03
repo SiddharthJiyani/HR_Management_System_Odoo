@@ -226,6 +226,14 @@ const Attendance = ({ isAdmin = false }) => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [weekData, setWeekData] = useState(null);
   const [monthData, setMonthData] = useState(null);
+  const [stats, setStats] = useState({
+    present: 0,
+    absent: 0,
+    onLeave: 0,
+    late: 0,
+    totalHours: '0',
+    avgHours: '0'
+  });
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
