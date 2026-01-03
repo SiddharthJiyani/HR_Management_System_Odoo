@@ -1,7 +1,8 @@
 const Leave = require("../models/Leave");
 const Employee = require("../models/Employee");
+const emailService = require("../services/emailService");
 
-// Apply for leave (Employee)
+// Apply for leave (Employee) 
 exports.applyLeave = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -79,6 +80,15 @@ exports.applyLeave = async (req, res) => {
       isHalfDay: isHalfDay || false,
       halfDayType: halfDayType || null
     });
+
+    // Send email notification to HR
+    try {
+      await emailService.sendLeaveRequestToHR(leave, employee);
+      console.log('📧 Leave request email sent to HR');
+    } catch (emailError) {
+      console.error('❌ Failed to send leave request email:', emailError.message);
+      // Continue even if email fails
+    }
 
     res.status(201).json({
       success: true,
@@ -496,6 +506,20 @@ exports.updateLeaveStatus = async (req, res) => {
 
     await leave.save();
     console.log('Leave saved successfully with status:', leave.status);
+
+    // Send email notification to employee about the decision
+    try {
+      const employee = await Employee.findById(leave.employee);
+      const approverEmployee = await Employee.findOne({ user: approver.id });
+      
+      if (employee) {
+        await emailService.sendLeaveDecision(leave, employee, status, approverEmployee);
+        console.log(`📧 Leave ${status} email sent to employee`);
+      }
+    } catch (emailError) {
+      console.error('❌ Failed to send leave decision email:', emailError.message);
+      // Continue even if email fails
+    }
 
     res.status(200).json({
       success: true,

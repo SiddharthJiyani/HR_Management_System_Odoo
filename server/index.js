@@ -4,6 +4,7 @@ const app = express();
 const cors = require("cors");
 const database = require('./config/database');
 const cookieParser = require("cookie-parser");
+const scheduler = require('./utils/scheduler');
 
 const port = process.env.PORT || 4000;
 
@@ -22,12 +23,16 @@ app.use(cors(corsOptions));
 // Connecting to database
 database.connectDB();
 
+// Initialize scheduled tasks (birthdays, anniversaries, missed checkouts)
+scheduler.init();
+
 // Routes
 const userRoutes = require("./routes/user");
 const employeeRoutes = require("./routes/employee");
 const attendanceRoutes = require("./routes/attendance");
 const leaveRoutes = require("./routes/leave");
 const payrollRoutes = require("./routes/payroll");
+const notificationRoutes = require("./routes/notifications");
 
 // API Routes
 app.use("/api/auth", userRoutes);
@@ -35,6 +40,7 @@ app.use("/api/employees", employeeRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/payroll", payrollRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Health check route
 app.get("/api/health", (req, res) => {
