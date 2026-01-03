@@ -6,7 +6,8 @@ import {
   EmployeeProfile, 
   MyProfile, 
   Attendance, 
-  TimeOff 
+  TimeOff,
+  Analytics 
 } from '../../pages';
 import { useAuth } from '../../context/AuthContext';
 import { employeeAPI, attendanceAPI } from '../../services/api';
@@ -350,6 +351,8 @@ const HRDashboard = () => {
         return <Attendance currentUser={currentUser || {}} />;
       case 'timeoff':
         return <TimeOff isHR={true} />;
+      case 'analytics':
+        return <Analytics />;
       default:
         return (
           <EmployeeDirectory 

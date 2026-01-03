@@ -48,6 +48,7 @@ const Navbar = ({
     { id: 'employees', label: 'Employees' },
     { id: 'attendance', label: 'Attendance' },
     { id: 'timeoff', label: 'Time Off' },
+    { id: 'analytics', label: 'Analytics' },
   ];
 
   return (
