@@ -555,7 +555,7 @@ const TimeOff = ({ isAdmin = false, isHR = false }) => {
             variant="primary"
             icon={<PlusIcon />}
             onClick={() => setShowNewRequest(true)}
-            className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
+            className="bg-gradient-to-r from-primary-400 to-primary-500 hover:from-primary-500 hover:to-primary-600 text-neutral-900"
           >
             NEW
           </Button>
@@ -565,7 +565,7 @@ const TimeOff = ({ isAdmin = false, isHR = false }) => {
       {/* Sub-tab & Balance */}
       <Card padding="none">
         <div className="flex items-center border-b border-neutral-100">
-          <div className="px-6 py-3 bg-pink-100 text-pink-700 font-semibold text-sm border-r border-neutral-100">
+          <div className="px-6 py-3 bg-primary-100 text-primary-700 font-semibold text-sm border-r border-neutral-100">
             Time Off
           </div>
         </div>

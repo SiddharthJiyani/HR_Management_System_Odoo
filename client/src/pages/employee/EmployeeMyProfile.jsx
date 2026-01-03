@@ -80,7 +80,7 @@ const ProfileHeader = ({ employee, onUpdate, isEditing, setIsEditing }) => {
                 className="relative w-24 h-24 text-2xl ring-4 ring-white shadow-soft-lg"
               />
               {isEditing && (
-                <button className="absolute -bottom-1 -right-1 w-8 h-8 bg-gradient-to-br from-pink-400 to-pink-500 rounded-full shadow-soft flex items-center justify-center text-white hover:scale-110 transition-transform">
+                <button className="absolute -bottom-1 -right-1 w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-500 rounded-full shadow-soft flex items-center justify-center text-neutral-900 hover:scale-110 transition-transform">
                   <CameraIcon />
                 </button>
               )}
