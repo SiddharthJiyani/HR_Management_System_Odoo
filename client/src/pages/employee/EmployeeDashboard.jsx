@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Avatar, StatusDot, Button, Badge, SearchBar } from '../../components/ui';
 import { Dropdown, DropdownItem } from '../../components/ui/Dropdown';
+import { attendanceAPI } from '../../services/api';
 import EmployeeAttendance from './EmployeeAttendance';
 import EmployeeMyProfile from './EmployeeMyProfile';
 import TimeOff from '../TimeOff';
@@ -27,13 +28,51 @@ const SettingsIcon = () => (
   </svg>
 );
 
+const LoadingSpinner = () => (
+  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+  </svg>
+);
+
 const EmployeeDashboard = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState('attendance'); // Default to attendance
   const [showMyProfile, setShowMyProfile] = useState(false);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
+  const [isCheckedOut, setIsCheckedOut] = useState(false);
   const [checkInTime, setCheckInTime] = useState(null);
+  const [checkOutTime, setCheckOutTime] = useState(null);
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [attendanceError, setAttendanceError] = useState(null);
+
+  // Fetch today's attendance status on component mount
+  const fetchTodayStatus = useCallback(async () => {
+    try {
+      setAttendanceLoading(true);
+      setAttendanceError(null);
+      
+      const response = await attendanceAPI.getTodayStatus();
+      
+      if (response.success && response.data) {
+        setIsCheckedIn(response.data.isCheckedIn);
+        setIsCheckedOut(response.data.isCheckedOut);
+        setCheckInTime(response.data.checkInTime);
+        setCheckOutTime(response.data.checkOutTime);
+      }
+    } catch (error) {
+      console.error('Error fetching today status:', error);
+      setAttendanceError('Failed to fetch attendance status');
+    } finally {
+      setAttendanceLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTodayStatus();
+  }, [fetchTodayStatus]);
 
   const handleMyProfile = () => {
     setShowMyProfile(true);
@@ -45,14 +84,56 @@ const EmployeeDashboard = () => {
     navigate('/signin');
   };
 
-  const handleCheckIn = () => {
-    setIsCheckedIn(true);
-    setCheckInTime(new Date());
+  const handleCheckIn = async () => {
+    try {
+      setActionLoading(true);
+      setAttendanceError(null);
+      
+      const response = await attendanceAPI.checkIn({
+        location: 'Office',
+        method: 'web'
+      });
+      
+      if (response.success) {
+        console.log('✅ Check-in successful');
+        setIsCheckedIn(true);
+        setIsCheckedOut(false);
+        setCheckInTime(response.data?.checkIn?.time || new Date().toISOString());
+        setCheckOutTime(null);
+      } else {
+        setAttendanceError(response.message || 'Check-in failed');
+      }
+    } catch (error) {
+      console.error('Check-in error:', error);
+      setAttendanceError(error.message || 'Failed to check in. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleCheckOut = () => {
-    setIsCheckedIn(false);
-    setCheckInTime(null);
+  const handleCheckOut = async () => {
+    try {
+      setActionLoading(true);
+      setAttendanceError(null);
+      
+      const response = await attendanceAPI.checkOut({
+        location: 'Office',
+        method: 'web'
+      });
+      
+      if (response.success) {
+        console.log('✅ Check-out successful');
+        setIsCheckedOut(true);
+        setCheckOutTime(response.data?.checkOut?.time || new Date().toISOString());
+      } else {
+        setAttendanceError(response.message || 'Check-out failed');
+      }
+    } catch (error) {
+      console.error('Check-out error:', error);
+      setAttendanceError(error.message || 'Failed to check out. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const userStatus = isCheckedIn ? 'present' : 'not-checked-in';
@@ -190,8 +271,37 @@ const EmployeeDashboard = () => {
                 </h3>
                 <StatusDot status={userStatus} size="md" />
               </div>
-              
-              {isCheckedIn ? (
+              {/* Loading State */}
+              {attendanceLoading ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-neutral-100 rounded-xl animate-pulse">
+                    <div className="h-4 bg-neutral-200 rounded w-24 mb-2"></div>
+                    <div className="h-3 bg-neutral-200 rounded w-32"></div>
+                  </div>
+                  <div className="h-10 bg-neutral-200 rounded-xl animate-pulse"></div>
+                </div>
+              ) : isCheckedIn && isCheckedOut ? (
+                /* Already checked out for the day */
+                <div className="space-y-4">
+                  <div className="p-4 bg-primary-50 rounded-xl">
+                    <div className="flex items-center gap-2 text-primary-600 mb-1">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="font-medium text-sm">Day Complete</span>
+                    </div>
+                    <p className="text-sm text-neutral-600">
+                      Checked in at {formatTime(checkInTime)}
+                    </p>
+                    <p className="text-sm text-neutral-600">
+                      Checked out at {formatTime(checkOutTime)}
+                    </p>
+                  </div>
+                  <div className="text-center text-sm text-neutral-500">
+                    See you tomorrow! 👋
+                  </div>
+                </div>
+              ) : isCheckedIn ? (
                 <div className="space-y-4">
                   <div className="p-4 bg-success/10 rounded-xl">
                     <div className="flex items-center gap-2 text-success mb-1">
@@ -202,8 +312,24 @@ const EmployeeDashboard = () => {
                     </div>
                     <p className="text-sm text-neutral-600">Since {formatTime(checkInTime)}</p>
                   </div>
-                  <Button variant="secondary" className="w-full" onClick={handleCheckOut}>
-                    Check Out →
+                  {attendanceError && (
+                    <div className="p-3 bg-error/10 rounded-lg">
+                      <p className="text-sm text-error">{attendanceError}</p>
+                    </div>
+                  )}
+                  <Button 
+                    variant="secondary" 
+                    className="w-full" 
+                    onClick={handleCheckOut}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <LoadingSpinner /> Checking Out...
+                      </span>
+                    ) : (
+                      'Check Out →'
+                    )}
                   </Button>
                 </div>
               ) : (
@@ -217,8 +343,24 @@ const EmployeeDashboard = () => {
                     </div>
                     <p className="text-sm text-neutral-600">Mark your attendance for today</p>
                   </div>
-                  <Button variant="primary" className="w-full" onClick={handleCheckIn}>
-                    Check In →
+                  {attendanceError && (
+                    <div className="p-3 bg-error/10 rounded-lg">
+                      <p className="text-sm text-error">{attendanceError}</p>
+                    </div>
+                  )}
+                  <Button 
+                    variant="primary" 
+                    className="w-full" 
+                    onClick={handleCheckIn}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <LoadingSpinner /> Checking In...
+                      </span>
+                    ) : (
+                      'Check In →'
+                    )}
                   </Button>
                 </div>
               )}
