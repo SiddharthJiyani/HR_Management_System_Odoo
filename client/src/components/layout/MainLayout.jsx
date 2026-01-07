@@ -14,7 +14,9 @@ const MainLayout = ({
   onLogout,
   onSettings,
   isCheckedIn,
+  isCheckedOut,
   checkInTime,
+  checkOutTime,
   onCheckIn,
   onCheckOut,
   showAttendancePanel = true
@@ -47,7 +49,9 @@ const MainLayout = ({
             <aside className="hidden lg:block fixed right-8 top-24 w-72">
               <AttendancePanel 
                 isCheckedIn={isCheckedIn}
+                isCheckedOut={isCheckedOut}
                 checkInTime={checkInTime}
+                checkOutTime={checkOutTime}
                 onCheckIn={onCheckIn}
                 onCheckOut={onCheckOut}
               />
@@ -80,7 +84,9 @@ const MainLayout = ({
         <div className="lg:hidden fixed bottom-4 left-4 right-4 z-30">
           <AttendancePanel 
             isCheckedIn={isCheckedIn}
+            isCheckedOut={isCheckedOut}
             checkInTime={checkInTime}
+            checkOutTime={checkOutTime}
             onCheckIn={onCheckIn}
             onCheckOut={onCheckOut}
           />

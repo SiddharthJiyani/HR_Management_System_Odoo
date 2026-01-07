@@ -20,8 +20,10 @@ const ArrowRightIcon = () => (
 );
 
 const AttendancePanel = ({ 
-  isCheckedIn = false, 
+  isCheckedIn = false,
+  isCheckedOut = false,
   checkInTime = null,
+  checkOutTime = null,
   onCheckIn,
   onCheckOut,
   className = ''
@@ -29,7 +31,8 @@ const AttendancePanel = ({
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
 
   useEffect(() => {
-    if (!isCheckedIn || !checkInTime) return;
+    // Don't show elapsed time if already checked out
+    if (!isCheckedIn || !checkInTime || isCheckedOut) return;
 
     const updateElapsedTime = () => {
       const now = new Date();
@@ -49,7 +52,7 @@ const AttendancePanel = ({
     const interval = setInterval(updateElapsedTime, 1000);
 
     return () => clearInterval(interval);
-  }, [isCheckedIn, checkInTime]);
+  }, [isCheckedIn, checkInTime, isCheckedOut]);
 
   const formatTime = (date) => {
     if (!date) return '';
@@ -58,6 +61,17 @@ const AttendancePanel = ({
       minute: '2-digit',
       hour12: true
     });
+  };
+
+  // Calculate worked hours for day complete view
+  const getWorkedHours = () => {
+    if (!checkInTime || !checkOutTime) return '—';
+    const checkIn = new Date(checkInTime);
+    const checkOut = new Date(checkOutTime);
+    const diff = checkOut - checkIn;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${minutes}m`;
   };
 
   return (
@@ -70,13 +84,43 @@ const AttendancePanel = ({
             Attendance
           </h3>
           <StatusDot 
-            status={isCheckedIn ? 'present' : 'not-checked-in'} 
+            status={isCheckedIn && !isCheckedOut ? 'present' : 'not-checked-in'} 
             size="md" 
           />
         </div>
 
         {/* Content */}
-        {isCheckedIn ? (
+        {isCheckedIn && isCheckedOut ? (
+          /* Day Complete - Already checked out */
+          <div className="space-y-4">
+            <div className="bg-primary-50 rounded-xl p-4">
+              <div className="flex items-center gap-2 text-primary-600 mb-2">
+                <CheckIcon />
+                <span className="font-medium text-sm">Day Complete</span>
+              </div>
+              <p className="text-sm text-neutral-600">
+                Checked in at {formatTime(checkInTime)}
+              </p>
+              <p className="text-sm text-neutral-600">
+                Checked out at {formatTime(checkOutTime)}
+              </p>
+            </div>
+
+            {/* Worked Hours */}
+            <div className="text-center py-3">
+              <p className="text-xs text-neutral-500 uppercase tracking-wide mb-1">
+                Worked Today
+              </p>
+              <p className="text-3xl font-bold text-success font-mono">
+                {getWorkedHours()}
+              </p>
+            </div>
+
+            <div className="text-center text-sm text-neutral-500">
+              See you tomorrow! 👋
+            </div>
+          </div>
+        ) : isCheckedIn ? (
           <div className="space-y-4">
             {/* Check-in Info */}
             <div className="bg-success/10 rounded-xl p-4">

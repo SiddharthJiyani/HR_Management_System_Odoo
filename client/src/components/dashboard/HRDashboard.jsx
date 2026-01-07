@@ -85,7 +85,9 @@ const HRDashboard = () => {
   
   // Attendance state
   const [isCheckedIn, setIsCheckedIn] = useState(false);
+  const [isCheckedOut, setIsCheckedOut] = useState(false);
   const [checkInTime, setCheckInTime] = useState(null);
+  const [checkOutTime, setCheckOutTime] = useState(null);
   
   // Loading and error states
   const [loading, setLoading] = useState(true);
@@ -152,14 +154,11 @@ const HRDashboard = () => {
       const response = await attendanceAPI.getTodayStatus();
       
       if (response.success && response.data) {
-        const { isCheckedIn: checkedIn, checkInTime: checkInTimeStr } = response.data;
-        if (checkedIn && checkInTimeStr) {
-          setIsCheckedIn(true);
-          setCheckInTime(new Date(checkInTimeStr));
-        } else {
-          setIsCheckedIn(false);
-          setCheckInTime(null);
-        }
+        const { isCheckedIn: checkedIn, isCheckedOut: checkedOut, checkInTime: checkInTimeStr, checkOutTime: checkOutTimeStr } = response.data;
+        setIsCheckedIn(!!checkedIn);
+        setIsCheckedOut(!!checkedOut);
+        setCheckInTime(checkInTimeStr ? new Date(checkInTimeStr) : null);
+        setCheckOutTime(checkOutTimeStr ? new Date(checkOutTimeStr) : null);
       }
     } catch (err) {
       console.error('Error fetching today status:', err);
@@ -256,8 +255,8 @@ const HRDashboard = () => {
       
       if (response.success) {
         const workedHours = checkInTime ? ((new Date() - checkInTime) / (1000 * 60 * 60)).toFixed(2) : 0;
-        setIsCheckedIn(false);
-        setCheckInTime(null);
+        setIsCheckedOut(true);
+        setCheckOutTime(new Date());
         // Refresh employees to update status
         await fetchEmployees();
         console.log(`✅ Check-out successful. Worked ${workedHours} hours`);
@@ -393,7 +392,9 @@ const HRDashboard = () => {
       onLogout={handleLogout}
       onSettings={handleSettings}
       isCheckedIn={isCheckedIn}
+      isCheckedOut={isCheckedOut}
       checkInTime={checkInTime}
+      checkOutTime={checkOutTime}
       onCheckIn={handleCheckIn}
       onCheckOut={handleCheckOut}
       showAttendancePanel={currentPage === 'employees' && !selectedEmployee && !showMyProfile}
