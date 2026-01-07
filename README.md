@@ -126,6 +126,123 @@ HR_Management_System_Odoo/
 
 ---
 
+## Database Schema
+
+```mermaid
+erDiagram
+    USER ||--|| EMPLOYEE : "has profile"
+    EMPLOYEE ||--o{ ATTENDANCE : "records"
+    EMPLOYEE ||--o{ LEAVE : "requests"
+    EMPLOYEE ||--o{ PAYROLL : "receives"
+    EMPLOYEE ||--o| EMPLOYEE : "reports to"
+    USER ||--o{ OTP : "verifies"
+
+    USER {
+        ObjectId _id PK
+        string employeeId UK
+        string email UK
+        string password
+        string firstName
+        string lastName
+        enum role 
+        string profilePhoto
+        string token
+        datetime createdAt
+    }
+
+    EMPLOYEE {
+        ObjectId _id PK
+        ObjectId user FK
+        string employeeId UK
+        string email UK
+        string firstName
+        string lastName
+        string phone
+        object address
+        date dateOfBirth
+        enum gender
+        string profilePhoto
+        enum department
+        string designation
+        enum role
+        enum employmentType
+        date joinDate
+        ObjectId reportingManager FK
+        enum status
+        object emergencyContact
+        string about
+        array skills
+        array certifications
+        object bankDetails
+        object leaveBalance
+        object salary
+        datetime createdAt
+    }
+
+    ATTENDANCE {
+        ObjectId _id PK
+        ObjectId employee FK
+        date date
+        object checkIn
+        object checkOut
+        enum status
+        number totalHours
+        number overtimeHours
+        number breakDuration
+        string note
+        ObjectId markedBy FK
+        boolean isRegularized
+        object regularizationRequest
+        datetime createdAt
+    }
+
+    LEAVE {
+        ObjectId _id PK
+        ObjectId employee FK
+        enum leaveType
+        string title
+        string reason
+        date startDate
+        date endDate
+        number totalDays
+        boolean isHalfDay
+        enum status 
+        ObjectId approvedBy FK
+        ObjectId rejectedBy FK
+        string adminComments
+        array attachments
+        datetime createdAt
+    }
+
+    PAYROLL {
+        ObjectId _id PK
+        ObjectId employee FK
+        number month
+        number year
+        object earnings
+        object deductions
+        object workingDays
+        number grossEarnings
+        number totalDeductions
+        number netSalary
+        enum paymentStatus 
+        date paymentDate
+        enum paymentMethod
+        ObjectId generatedBy FK
+        ObjectId approvedBy FK
+        datetime createdAt
+    }
+
+    OTP {
+        ObjectId _id PK
+        string email
+        string otp
+        datetime createdAt 
+    }
+```
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
